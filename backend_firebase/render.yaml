@@ -8,6 +8,6 @@ services:
       - key: DJANGO_SETTINGS_MODULE
         value: backend.settings
       - key: SECRET_KEY
-        value: tu_clave_secreta_django
+        value: django-insecure-d+j2xsj=qo2vfiybnz8xi1))=z@7wg3w=pg%*bf3m!(gswl=04
       - key: DEBUG
         value: 'False'
