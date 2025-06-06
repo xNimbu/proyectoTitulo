@@ -155,3 +155,33 @@ def pet_detail(request, pet_id):
         return JsonResponse({"mensaje": "Mascota eliminada"})
 
     return JsonResponse({"error": "Método no permitido"}, status=405)
+
+
+@csrf_exempt
+def profile_list(request):
+    """
+    GET /api/profile_list/  → devuelve un arreglo con todos los perfiles existentes
+    (no requiere token si lo expones como público).
+    """
+    if request.method == "GET":
+        perfiles = []
+        # Recorremos todos los documentos bajo "profiles"
+        for doc_snap in db.collection("profiles").stream():
+            data = doc_snap.to_dict()
+            # Agregamos el campo 'uid' (opcional) para identificar al documento
+            data["uid"] = doc_snap.id
+
+            # Aseguramos que existan los campos que Angular espera:
+            #   - username (string)
+            #   - avatar (string)   – en tu modelo lo llamas "photoURL"
+            #   - unreadCount (número) – puede venir de tu lógica o inicializarse a 0
+            perfil = {
+                "username":   data.get("username", ""),      # p.ej. "ilusm"
+                "avatar":     data.get("photoURL", ""),      # si guardaste photoURL en Firestore
+                "unreadCount": data.get("unreadCount", 0)    # si no lo tienes, lo inicializas a 0
+            }
+            perfiles.append(perfil)
+
+        return JsonResponse(perfiles, safe=False)
+
+    return JsonResponse({"error": "Método no permitido"}, status=405)
