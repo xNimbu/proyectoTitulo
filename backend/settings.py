@@ -25,7 +25,11 @@ SECRET_KEY = 'django-insecure-d+j2xsj=qo2vfiybnz8xi1))=z@7wg3w=pg%*bf3m!(gswl=04
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = True
 
-ALLOWED_HOSTS = ['*']
+# Define tus hosts permitidos vía ENV, incluye tu dominio de Render
+ALLOWED_HOSTS = os.getenv(
+    'ALLOWED_HOSTS',
+    'localhost,proyectotitulo.onrender.com'
+).split(',')
 
 
 # Application definition
@@ -40,6 +44,7 @@ INSTALLED_APPS = [
     'rest_framework',
     'corsheaders',
     'core',
+    'channels',
 ]
 
 MIDDLEWARE = [
@@ -56,10 +61,19 @@ MIDDLEWARE = [
 
 ROOT_URLCONF = 'backend.urls'
 
-CORS_ALLOW_ALL_ORIGINS = [
-    'http://localhost:4200',
-    'https://proyectotitulo.onrender.com'
-]
+# Permite tu frontend Angular
+CORS_ALLOWED_ORIGINS = os.getenv(
+    'CORS_ALLOWED_ORIGINS',
+    'http://localhost:4200,https://proyectotitulo.onrender.com'
+).split(',')
+REDIS_URL = os.getenv('REDIS_URL', 'redis://127.0.0.1:6379')
+CHANNEL_LAYERS = {
+    'default': {
+        'BACKEND': 'channels_redis.core.RedisChannelLayer',
+        'CONFIG': { 'hosts': [REDIS_URL], },
+    },
+}
+
 TEMPLATES = [
     {
         'BACKEND': 'django.template.backends.django.DjangoTemplates',
@@ -77,6 +91,11 @@ TEMPLATES = [
 ]
 
 WSGI_APPLICATION = 'backend.wsgi.application'
+
+# Punto de entrada ASGI, para Channels
+ASGI_APPLICATION = 'backend.asgi.application'
+
+
 
 
 # Database
