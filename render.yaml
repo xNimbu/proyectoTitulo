@@ -1,13 +1,38 @@
 services:
+  # (opcional) si quieres declarar tu Redis en IaC:
+  - type: redis
+    name: redis
+    plan: starter
+
   - type: web
     name: django-backend
     env: python
-    buildCommand: pip install -r requirements.txt
-    startCommand: gunicorn backend.wsgi:application
+
+    # 1) build: instala, migra y collectstatic
+    buildCommand: |
+      pip install -r requirements.txt && \
+      python manage.py migrate --noinput && \
+      python manage.py collectstatic --noinput
+
+    # 2) start: daphne escucha HTTP + WS en $PORT
+    startCommand: daphne -b 0.0.0.0 -p $PORT backend.asgi:application
+
     envVars:
       - key: DJANGO_SETTINGS_MODULE
         value: backend.settings
+
       - key: SECRET_KEY
         value: django-insecure-d+j2xsj=qo2vfiybnz8xi1))=z@7wg3w=pg%*bf3m!(gswl=04
+
       - key: DEBUG
         value: 'False'
+
+      - key: ALLOWED_HOSTS
+        value: localhost,proyectotitulo.onrender.com
+
+      - key: CORS_ALLOWED_ORIGINS
+        value: http://localhost:4200,https://proyectotitulo.onrender.com
+
+      # 3) URL de tu Redis (si lo defines arriba, usa fromService)
+      - key: REDIS_URL
+        fromService: redis
