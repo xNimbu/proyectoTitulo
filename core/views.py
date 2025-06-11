@@ -185,3 +185,18 @@ def profile_list(request):
         return JsonResponse(perfiles, safe=False)
 
     return JsonResponse({"error": "Método no permitido"}, status=405)
+
+def chat_history(request, room):
+    """
+    GET /api/chat/<room>/history/ → lista todos los mensajes de la sala ordenados por timestamp
+    """
+    if request.method != "GET":
+        return JsonResponse({"error": "Método no permitido"}, status=405)
+
+    # Filtramos por room y devolvemos sólo user+message (puedes añadir timestamp si quieres)
+    mensajes = ChatMessage.objects.filter(room=room)
+    data = [
+        {"user": m.user, "message": m.message, "timestamp": m.timestamp.isoformat()}
+        for m in mensajes
+    ]
+    return JsonResponse(data, safe=False)

@@ -1,5 +1,6 @@
 # core/consumers.py
 from channels.generic.websocket import AsyncWebsocketConsumer
+from urllib.parse import parse_qs
 import json
 
 class ChatConsumer(AsyncWebsocketConsumer):
@@ -31,13 +32,17 @@ class ChatConsumer(AsyncWebsocketConsumer):
 
     async def receive(self, text_data):
         data = json.loads(text_data)
-        # puedes añadir self.username aquí si quieres
+        msg = await database_sync_to_async(ChatMessage.objects.create)(
+            room=self.room,
+            user=data.get('user', self.username),
+            message=data['message']
+        )
         await self.channel_layer.group_send(
             self.room_group,
             {
                 'type': 'chat.message',
-                'message': data['message'],
-                'user': data.get('user', self.username),
+                'message': msg.message,
+                'user': msg.user,
             }
         )
 
