@@ -23,4 +23,5 @@ application = ProtocolTypeRouter({
             URLRouter(core.routing.websocket_urlpatterns)
         )
     ),
+    ["https://proyectotitulo.onrender.com"]
 })
