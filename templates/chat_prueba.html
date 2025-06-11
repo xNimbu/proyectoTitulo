@@ -1,0 +1,102 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <title>Chat Prueba</title>
+  <style>
+    body {
+      font-family: sans-serif;
+      margin: 2rem;
+    }
+    #chat-log {
+      border: 1px solid #ccc;
+      height: 300px;
+      overflow-y: auto;
+      padding: 10px;
+      margin-bottom: 1rem;
+      background: #fafafa;
+    }
+    #chat-log div {
+      margin-bottom: 0.5rem;
+    }
+    #chat-message-input {
+      width: 80%;
+      padding: 0.5rem;
+      font-size: 1rem;
+    }
+    #chat-message-submit {
+      padding: 0.6rem 1rem;
+      font-size: 1rem;
+    }
+    #status {
+      margin-bottom: 1rem;
+      font-style: italic;
+      color: gray;
+    }
+  </style>
+</head>
+<body>
+  <h1>Chat Prueba</h1>
+  <div id="status">Conectando…</div>
+  <div id="chat-log"></div>
+
+  <input id="chat-message-input" type="text" placeholder="Escribe tu mensaje…" disabled>
+  <button id="chat-message-submit" disabled>Enviar</button>
+
+  <script>
+    const statusEl = document.getElementById('status');
+    const inputEl  = document.getElementById('chat-message-input');
+    const btnEl    = document.getElementById('chat-message-submit');
+
+    // Creamos el WebSocket
+    const chatSocket = new WebSocket('ws://127.0.0.1:8000/ws/chat/prueba');
+
+    // Cuando abra, habilitamos UI
+    chatSocket.addEventListener('open', () => {
+      statusEl.textContent = 'Conectado';
+      inputEl.disabled = false;
+      btnEl.disabled   = false;
+      inputEl.focus();
+    });
+
+    chatSocket.addEventListener('message', (e) => {
+      const data = JSON.parse(e.data);
+      const log = document.getElementById('chat-log');
+      const msg = document.createElement('div');
+      msg.textContent = data.message ?? JSON.stringify(data);
+      log.appendChild(msg);
+      log.scrollTop = log.scrollHeight;
+    });
+
+    chatSocket.addEventListener('close', () => {
+      statusEl.textContent = 'Desconectado';
+      inputEl.disabled = true;
+      btnEl.disabled   = true;
+    });
+
+    chatSocket.addEventListener('error', (err) => {
+      console.error('Error en WebSocket:', err);
+    });
+
+    // Función para enviar
+    function sendMessage() {
+      const text = inputEl.value.trim();
+      if (!text) return;
+
+      // Solo enviamos si ya estamos en OPEN
+      if (chatSocket.readyState === WebSocket.OPEN) {
+        chatSocket.send(JSON.stringify({ message: text }));
+        inputEl.value = '';
+      } else {
+        console.warn('WebSocket no está listo. Estado:', chatSocket.readyState);
+      }
+    }
+
+    // Enviar con botón o Enter
+    btnEl.addEventListener('click', sendMessage);
+    inputEl.addEventListener('keyup', e => {
+      if (e.key === 'Enter') sendMessage();
+    });
+  </script>
+</body>
+</html>
