@@ -35,4 +35,4 @@ services:
 
       # 3) URL de tu Redis (si lo defines arriba, usa fromService)
       - key: REDIS_URL
-        fromService: redis
+        fromService: redis-chat
