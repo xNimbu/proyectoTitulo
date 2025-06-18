@@ -200,3 +200,114 @@ def chat_history(request, room):
         for m in mensajes
     ]
     return JsonResponse(data, safe=False)
+
+@csrf_exempt
+@firebase_login_required
+def posts(request):
+    posts_ref = db.collection("posts")
+
+    if request.method == "GET":
+        lista = []
+        for doc in posts_ref.order_by("timestamp", direction="DESCENDING").stream():
+            p = doc.to_dict()
+            p["id"] = doc.id
+            lista.append(p)
+        return JsonResponse({"posts": lista})
+
+    elif request.method == "POST":
+        uid = request.user_firebase["uid"]
+        username = request.user_firebase["email"]
+        data = json.loads(request.body)
+        nuevo = {
+            "userId": uid,
+            "username": username,
+            "content": data.get("content"),
+            "photoURL": data.get("photoURL"),
+            "timestamp": firestore.SERVER_TIMESTAMP,
+        }
+        _, doc_ref = posts_ref.add(nuevo)
+        return JsonResponse({"mensaje": "Post creado", "id": doc_ref.id})
+
+    return JsonResponse({"error": "Método no permitido"}, status=405)
+
+@csrf_exempt
+def posts_by_user(request, uid):
+    if request.method != "GET":
+        return JsonResponse({"error": "Método no permitido"}, status=405)
+
+    posts_ref = db.collection("posts").where("userId", "==", uid)
+    lista = []
+    for doc in posts_ref.order_by("timestamp", direction="DESCENDING").stream():
+        post = doc.to_dict()
+        post["id"] = doc.id
+        lista.append(post)
+    return JsonResponse({"posts": lista})
+
+
+@csrf_exempt
+@firebase_login_required
+def post_detail(request, post_id):
+    doc_ref = db.collection("posts").document(post_id)
+
+    if request.method == "PUT":
+        data = json.loads(request.body)
+        doc_ref.update({
+            "content": data.get("content"),
+            "photoURL": data.get("photoURL"),
+            "timestamp": firestore.SERVER_TIMESTAMP,
+        })
+        return JsonResponse({"mensaje": "Post actualizado"})
+
+    elif request.method == "DELETE":
+        doc_ref.delete()
+        return JsonResponse({"mensaje": "Post eliminado"})
+
+    return JsonResponse({"error": "Método no permitido"}, status=405)
+
+
+@csrf_exempt
+@firebase_login_required
+def comments(request, post_id):
+    comments_ref = db.collection("posts").document(post_id).collection("comments")
+
+    if request.method == "GET":
+        lista = []
+        for c in comments_ref.order_by("timestamp").stream():
+            comment = c.to_dict()
+            comment["id"] = c.id
+            lista.append(comment)
+        return JsonResponse({"comments": lista})
+
+    elif request.method == "POST":
+        user = request.user_firebase
+        data = json.loads(request.body)
+        nuevo = {
+            "userId": user["uid"],
+            "username": user["email"],
+            "message": data.get("message"),
+            "timestamp": firestore.SERVER_TIMESTAMP,
+        }
+        _, doc_ref = comments_ref.add(nuevo)
+        return JsonResponse({"mensaje": "Comentario agregado", "id": doc_ref.id})
+
+    return JsonResponse({"error": "Método no permitido"}, status=405)
+
+
+@csrf_exempt
+@firebase_login_required
+def comment_detail(request, post_id, comment_id):
+    comment_ref = db.collection("posts").document(post_id).collection("comments").document(comment_id)
+
+    if request.method == "PUT":
+        data = json.loads(request.body)
+        comment_ref.update({
+            "message": data.get("message"),
+            "timestamp": firestore.SERVER_TIMESTAMP,
+        })
+        return JsonResponse({"mensaje": "Comentario actualizado"})
+
+    elif request.method == "DELETE":
+        comment_ref.delete()
+        return JsonResponse({"mensaje": "Comentario eliminado"})
+
+    return JsonResponse({"error": "Método no permitido"}, status=405)
