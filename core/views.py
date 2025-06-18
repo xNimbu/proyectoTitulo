@@ -4,6 +4,7 @@ import json
 from .firebase_config import db
 from .auth import firebase_login_required
 from firebase_admin import auth as firebase_auth
+from google.cloud import firestore
 
 from core import auth
 
