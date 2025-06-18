@@ -1,0 +1,79 @@
+<!DOCTYPE html>
+<html lang="es">
+
+<head>
+    <meta charset="UTF-8" />
+    <title>Obtener Token Firebase</title>
+    <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
+</head>
+
+<body>
+    <h2>Obtener Token Firebase</h2>
+
+    <form id="loginForm">
+        <label>Email:</label><br>
+        <input type="email" id="email" required /><br><br>
+
+        <label>Contraseña:</label><br>
+        <input type="password" id="password" required /><br><br>
+
+        <button type="submit">Iniciar sesión con Email</button>
+    </form>
+
+    <br>
+    <button id="googleLogin">Iniciar sesión con Google</button>
+
+    <h3>Token:</h3>
+    <textarea id="tokenOutput" rows="10" cols="80" readonly></textarea>
+
+    <script>
+        // 🔧 Reemplaza con tu configuración de Firebase
+        const firebaseConfig = {
+            apiKey: "AIzaSyBd0_Ahe1MUl8kb9lXaQterrraQi1lbIvk",
+            authDomain: "petlink-d54eb.firebaseapp.com",
+            databaseURL: "https://petlink-d54eb-default-rtdb.firebaseio.com/",
+            projectId: "petlink-d54eb",
+            storageBucket: "petlink-d54eb.firebasestorage.app",
+            messagingSenderId: "560042626252",
+            appId: "1:560042626252:web:a2f69ef93b283064e08669",
+            measurementId: "G-PLMLME8T8T"
+        };
+
+        firebase.initializeApp(firebaseConfig);
+        const auth = firebase.auth();
+
+        const form = document.getElementById("loginForm");
+        const tokenOutput = document.getElementById("tokenOutput");
+        const googleBtn = document.getElementById("googleLogin");
+
+        // Iniciar sesión con Email/Contraseña
+        form.addEventListener("submit", async (e) => {
+            e.preventDefault();
+            const email = document.getElementById("email").value;
+            const password = document.getElementById("password").value;
+
+            try {
+                const userCred = await auth.signInWithEmailAndPassword(email, password);
+                const token = await userCred.user.getIdToken();
+                tokenOutput.value = token;
+            } catch (error) {
+                tokenOutput.value = "Error: " + error.message;
+            }
+        });
+
+        // Iniciar sesión con Google
+        googleBtn.addEventListener("click", async () => {
+            const provider = new firebase.auth.GoogleAuthProvider();
+            try {
+                const result = await auth.signInWithPopup(provider);
+                const token = await result.user.getIdToken();
+                tokenOutput.value = token;
+            } catch (error) {
+                tokenOutput.value = "Error: " + error.message;
+            }
+        });
+    </script>
+</body>
+
+</html>
