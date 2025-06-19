@@ -1,112 +1,182 @@
 <!DOCTYPE html>
 <html lang="es">
+
 <head>
-  <meta charset="UTF-8">
-  <title>Mis Posts</title>
-  <style>
-    body { font-family: Arial, sans-serif; margin: 20px; }
-    textarea, input, button { width: 100%; margin-bottom: 10px; padding: 8px; }
-    .post { border: 1px solid #ccc; padding: 10px; margin-bottom: 10px; }
-    .photo { max-width: 100%; margin-top: 10px; }
-  </style>
+    <meta charset="UTF-8">
+    <title>Mis Posts</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 20px;
+        }
+
+        textarea,
+        input {
+            width: 100%;
+            margin-bottom: 10px;
+        }
+
+        .post {
+            border: 1px solid #ccc;
+            padding: 10px;
+            margin-bottom: 10px;
+        }
+
+        .photo {
+            max-width: 100%;
+            margin-top: 10px;
+        }
+    </style>
 </head>
+
 <body>
 
-  <h2>Ver mis publicaciones</h2>
+    <h2>Ver mis publicaciones</h2>
 
-  <label>Token Firebase:</label>
-  <textarea id="token" rows="4" placeholder="Pega aquí tu token Firebase"></textarea>
-  <button onclick="cargarPosts()">Cargar Posts</button>
+    <label>Token Firebase:</label>
+    <textarea id="token" rows="3" placeholder="Pega aquí tu token Firebase"></textarea>
 
-  <hr>
+    <h3>Crear nueva publicación</h3>
+    <textarea id="postContent" rows="3" placeholder="Escribe algo..." id="nuevoContenido"></textarea>
+    <input type="file" id="imageInput" accept="image/*">
+    <button onclick="crearPost()">Publicar</button>
 
-  <h3>Crear nueva publicación</h3>
-  <label>Texto:</label>
-  <textarea id="postContent" rows="3" placeholder="¿Qué estás pensando?"></textarea>
+    <hr>
+    <button onclick="cargarPosts()">Cargar Posts</button>
+    <div id="resultados"></div>
 
-  <label>Imagen:</label>
-  <input type="file" id="imageInput" accept="image/*" />
+    <script>
+        async function crearPost() {
+            const token = document.getElementById("token").value;
+            const content = document.getElementById("postContent").value;
+            const imageFile = document.getElementById("imageInput").files[0];
 
-  <button onclick="crearPost()">Publicar</button>
+            const formData = new FormData();
+            formData.append("content", content);
+            if (imageFile) {
+                formData.append("image", imageFile);
+            }
 
-  <hr>
+            try {
+                const res = await fetch("https://proyectotitulo.onrender.com/api/profile/posts/", {
+                    method: "POST",
+                    headers: {
+                        Authorization: "Bearer " + token,
+                    },
+                    body: formData,
+                });
 
-  <div id="resultados"></div>
-
-  <script>
-    async function cargarPosts() {
-      const token = document.getElementById("token").value;
-      const contenedor = document.getElementById("resultados");
-      contenedor.innerHTML = "Cargando...";
-
-      try {
-        const res = await fetch("https://proyectotitulo.onrender.com/api/profile/posts/", {
-          headers: {
-            Authorization: "Bearer " + token,
-          },
-        });
-
-        const data = await res.json();
-
-        if (data.posts && Array.isArray(data.posts)) {
-          contenedor.innerHTML = "";
-          data.posts.forEach(post => {
-            const div = document.createElement("div");
-            div.className = "post";
-            div.innerHTML = `
-              <strong>Contenido:</strong> ${post.content || "(Sin contenido)"}<br>
-              <strong>Fecha:</strong> ${new Date(post.timestamp).toLocaleString()}<br>
-              ${post.photoURL ? `<img class="photo" src="${post.photoURL}" alt="imagen">` : ""}
-            `;
-            contenedor.appendChild(div);
-          });
-        } else {
-          contenedor.innerHTML = "No se encontraron posts.";
+                const data = await res.json();
+                alert("Post creado: " + data.mensaje);
+                cargarPosts();
+            } catch (err) {
+                alert("Error al crear post: " + err.message);
+            }
         }
-      } catch (err) {
-        contenedor.innerHTML = "Error al obtener posts: " + err.message;
-      }
-    }
 
-    async function crearPost() {
-      const token = document.getElementById("token").value;
-      const content = document.getElementById("postContent").value;
-      const fileInput = document.getElementById("imageInput");
+        async function cargarPosts() {
+            const token = document.getElementById("token").value;
+            const contenedor = document.getElementById("resultados");
+            contenedor.innerHTML = "Cargando...";
 
-      let imageUrl = "";
+            try {
+                const res = await fetch("https://proyectotitulo.onrender.com/api/profile/posts/", {
+                    headers: {
+                        Authorization: "Bearer " + token,
+                    },
+                });
 
-      if (fileInput.files.length > 0) {
-        const file = fileInput.files[0];
-        // Usamos imgur como demo rápida, puedes cambiar por tu propio endpoint
-        const formData = new FormData();
-        formData.append("image", file);
+                const data = await res.json();
 
-        const uploadRes = await fetch("https://api.imgbb.com/1/upload?key=add34ba93ab62f67b931e22df2c950c0", {
-          method: "POST",
-          body: formData,
-        });
+                if (data.posts && Array.isArray(data.posts)) {
+                    contenedor.innerHTML = "";
+                    data.posts.forEach(post => {
+                        const div = document.createElement("div");
+                        div.className = "post";
+                        div.innerHTML = `
+              <strong>Contenido:</strong><br>
+              <textarea id="content-${post.id}">${post.content || ""}</textarea>
+              ${post.photoURL ? `<br><img class="photo" src="${post.photoURL}" alt="imagen">` : ""}
+              <br><input type="file" id="img-${post.id}" accept="image/*"><br>
+              <small>Fecha: ${new Date(post.timestamp).toLocaleString()}</small><br>
+              <button onclick="editarPost('${post.id}', '${post.photoURL || ""}')">Editar</button>
+              <button onclick="eliminarPost('${post.id}')">Eliminar</button>
+              <hr>
+            `;
+                        contenedor.appendChild(div);
+                    });
+                } else {
+                    contenedor.innerHTML = "No se encontraron posts.";
+                }
+            } catch (err) {
+                contenedor.innerHTML = "Error al obtener posts: " + err.message;
+            }
+        }
 
-        const uploadData = await uploadRes.json();
-        imageUrl = uploadData.data.url;
-      }
+        async function editarPost(id, oldPhotoURL) {
+            const token = document.getElementById("token").value;
+            const nuevoContenido = document.getElementById(`content-${id}`).value;
+            const imageFile = document.getElementById(`img-${id}`).files[0];
 
-      const res = await fetch("https://proyectotitulo.onrender.com/api/profile/posts/", {
-        method: "POST",
-        headers: {
-          Authorization: "Bearer " + token,
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          content: content,
-          photoURL: imageUrl,
-        }),
-      });
+            let photoURL = oldPhotoURL;
 
-      const data = await res.json();
-      alert("Post creado: " + data.mensaje);
-      cargarPosts(); // recarga publicaciones
-    }
-  </script>
+            if (imageFile) {
+                const formData = new FormData();
+                formData.append("image", imageFile);
+
+                const res = await fetch("https://api.imgbb.com/1/upload?key=TU_API_KEY", {
+                    method: "POST",
+                    body: formData,
+                });
+
+                const data = await res.json();
+                photoURL = data.data.url;
+            }
+
+            const body = {
+                content: nuevoContenido,
+                photoURL: photoURL,
+            };
+
+            try {
+                const res = await fetch(`https://proyectotitulo.onrender.com/api/profile/posts/${id}/`, {
+                    method: "PUT",
+                    headers: {
+                        Authorization: "Bearer " + token,
+                        "Content-Type": "application/json",
+                    },
+                    body: JSON.stringify(body),
+                });
+
+                const data = await res.json();
+                alert(data.mensaje);
+                cargarPosts();
+            } catch (err) {
+                alert("Error al editar: " + err.message);
+            }
+        }
+
+        async function eliminarPost(id) {
+            const token = document.getElementById("token").value;
+            if (!confirm("¿Estás seguro que deseas eliminar este post?")) return;
+
+            try {
+                const res = await fetch(`https://proyectotitulo.onrender.com/api/profile/posts/${id}/`, {
+                    method: "DELETE",
+                    headers: {
+                        Authorization: "Bearer " + token,
+                    },
+                });
+
+                const data = await res.json();
+                alert(data.mensaje);
+                cargarPosts();
+            } catch (err) {
+                alert("Error al eliminar post: " + err.message);
+            }
+        }
+    </script>
 
 </body>
+
 </html>

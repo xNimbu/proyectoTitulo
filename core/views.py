@@ -275,13 +275,21 @@ def user_post_detail(request, post_id):
 
     if request.method == "PUT":
         data = json.loads(request.body)
-        doc_ref.update(
-            {
-                "content": data.get("content"),
-                "photoURL": data.get("photoURL"),
-                "timestamp": datetime.utcnow(),
-            }
-        )
+
+        # Obtener el post actual para conservar el photoURL si no se manda nuevo
+        doc_snapshot = doc_ref.get()
+        if not doc_snapshot.exists:
+            return JsonResponse({"error": "Post no encontrado"}, status=404)
+        post_actual = doc_snapshot.to_dict()
+
+        nuevo_content = data.get("content", post_actual.get("content"))
+        nuevo_photoURL = data.get("photoURL", post_actual.get("photoURL"))
+
+        doc_ref.update({
+            "content": nuevo_content,
+            "photoURL": nuevo_photoURL,
+            "timestamp": datetime.utcnow(),
+        })
         return JsonResponse({"mensaje": "Post actualizado"})
 
     elif request.method == "DELETE":
