@@ -1,0 +1,60 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <title>Mis Posts</title>
+  <style>
+    body { font-family: Arial, sans-serif; margin: 20px; }
+    textarea, input { width: 100%; margin-bottom: 10px; }
+    .post { border: 1px solid #ccc; padding: 10px; margin-bottom: 10px; }
+    .photo { max-width: 100%; margin-top: 10px; }
+  </style>
+</head>
+<body>
+
+  <h2>Ver mis publicaciones</h2>
+
+  <label>Token Firebase:</label>
+  <textarea id="token" rows="4" placeholder="Pega aquí tu token Firebase"></textarea>
+  <button onclick="cargarPosts()">Cargar Posts</button>
+
+  <div id="resultados"></div>
+
+  <script>
+    async function cargarPosts() {
+      const token = document.getElementById("token").value;
+      const contenedor = document.getElementById("resultados");
+      contenedor.innerHTML = "Cargando...";
+
+      try {
+        const res = await fetch("https://proyectotitulo.onrender.com/profile/posts/", {
+          headers: {
+            Authorization: "Bearer " + token,
+          },
+        });
+
+        const data = await res.json();
+
+        if (data.posts && Array.isArray(data.posts)) {
+          contenedor.innerHTML = "";
+          data.posts.forEach(post => {
+            const div = document.createElement("div");
+            div.className = "post";
+            div.innerHTML = `
+              <strong>Contenido:</strong> ${post.content || "(Sin contenido)"}<br>
+              <strong>Fecha:</strong> ${new Date(post.timestamp).toLocaleString()}<br>
+              ${post.photoURL ? `<img class="photo" src="${post.photoURL}" alt="imagen">` : ""}
+            `;
+            contenedor.appendChild(div);
+          });
+        } else {
+          contenedor.innerHTML = "No se encontraron posts.";
+        }
+      } catch (err) {
+        contenedor.innerHTML = "Error al obtener posts: " + err.message;
+      }
+    }
+  </script>
+
+</body>
+</html>

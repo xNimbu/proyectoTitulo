@@ -74,7 +74,7 @@ ROOT_URLCONF = 'backend.urls'
 # CORS
 CORS_ALLOWED_ORIGINS = os.getenv(
     'CORS_ALLOWED_ORIGINS',
-    'http://localhost:4200,https://proyectotitulo.onrender.com'
+    'http://localhost:4200,https://proyectotitulo.onrender.com,http://localhost:5500'
 ).split(',')
 
 # Channels (ASGI + WebSockets)
