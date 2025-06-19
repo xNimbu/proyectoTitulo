@@ -72,10 +72,27 @@ MIDDLEWARE = [
 ROOT_URLCONF = 'backend.urls'
 
 # CORS
-CORS_ALLOWED_ORIGINS = os.getenv(
-    'CORS_ALLOWED_ORIGINS',
-    'http://localhost:4200,https://proyectotitulo.onrender.com,http://localhost:5500'
-).split(',')
+CORS_ALLOWED_ORIGINS = [
+    "http://localhost:5500",
+    "http://127.0.0.1:5500",
+    "http://localhost:4200",
+    "https://proyectotitulo.onrender.com",
+]
+
+CORS_ALLOW_HEADERS = [
+    "authorization",
+    "content-type",
+]
+
+CORS_ALLOW_METHODS = [
+    "GET",
+    "POST",
+    "PUT",
+    "DELETE",
+    "OPTIONS",
+]
+
+CORS_ALLOW_CREDENTIALS = True
 
 # Channels (ASGI + WebSockets)
 ASGI_APPLICATION = 'backend.asgi.application'
