@@ -5,6 +5,7 @@ from .firebase_config import db
 from .auth import firebase_login_required
 from firebase_admin import auth as firebase_auth
 from google.cloud import firestore
+from datetime import datetime
 
 from core import auth
 
@@ -224,7 +225,7 @@ def posts(request):
             "username": username,
             "content": data.get("content"),
             "photoURL": data.get("photoURL"),
-            "timestamp": firestore.SERVER_TIMESTAMP,
+            "timestamp": datetime.utcnow(),
         }
         _, doc_ref = posts_ref.add(nuevo)
         return JsonResponse({"mensaje": "Post creado", "id": doc_ref.id})
@@ -255,7 +256,7 @@ def post_detail(request, post_id):
         doc_ref.update({
             "content": data.get("content"),
             "photoURL": data.get("photoURL"),
-            "timestamp": firestore.SERVER_TIMESTAMP,
+            "timestamp": datetime.utcnow(),
         })
         return JsonResponse({"mensaje": "Post actualizado"})
 
@@ -286,7 +287,7 @@ def comments(request, post_id):
             "userId": user["uid"],
             "username": user["email"],
             "message": data.get("message"),
-            "timestamp": firestore.SERVER_TIMESTAMP,
+            "timestamp": datetime.utcnow(),
         }
         _, doc_ref = comments_ref.add(nuevo)
         return JsonResponse({"mensaje": "Comentario agregado", "id": doc_ref.id})
@@ -303,7 +304,7 @@ def comment_detail(request, post_id, comment_id):
         data = json.loads(request.body)
         comment_ref.update({
             "message": data.get("message"),
-            "timestamp": firestore.SERVER_TIMESTAMP,
+            "timestamp": datetime.utcnow(),
         })
         return JsonResponse({"mensaje": "Comentario actualizado"})
 
