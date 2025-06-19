@@ -6,6 +6,7 @@ from .auth import firebase_login_required
 from firebase_admin import auth as firebase_auth
 from google.cloud import firestore
 from datetime import datetime
+from core.models import ChatMessage
 
 from core import auth
 
@@ -178,15 +179,20 @@ def profile_list(request):
             #   - avatar (string)   – en tu modelo lo llamas "photoURL"
             #   - unreadCount (número) – puede venir de tu lógica o inicializarse a 0
             perfil = {
-                "username":   data.get("username", ""),      # p.ej. "ilusm"
-                "avatar":     data.get("photoURL", ""),      # si guardaste photoURL en Firestore
-                "unreadCount": data.get("unreadCount", 0)    # si no lo tienes, lo inicializas a 0
+                "username": data.get("username", ""),  # p.ej. "ilusm"
+                "avatar": data.get(
+                    "photoURL", ""
+                ),  # si guardaste photoURL en Firestore
+                "unreadCount": data.get(
+                    "unreadCount", 0
+                ),  # si no lo tienes, lo inicializas a 0
             }
             perfiles.append(perfil)
 
         return JsonResponse(perfiles, safe=False)
 
     return JsonResponse({"error": "Método no permitido"}, status=405)
+
 
 def chat_history(request, room):
     """
@@ -203,65 +209,59 @@ def chat_history(request, room):
     ]
     return JsonResponse(data, safe=False)
 
+
 @csrf_exempt
 @firebase_login_required
-def posts(request):
-    posts_ref = db.collection("posts")
+def user_posts(request):
+    """
+    GET  /profile/posts/        → Lista los posts del usuario autenticado
+    POST /profile/posts/        → Crea un nuevo post para el usuario
+    """
+    uid = request.user_firebase["uid"]
+    posts_ref = db.collection("profiles").document(uid).collection("posts")
 
     if request.method == "GET":
         lista = []
         for doc in posts_ref.order_by("timestamp", direction="DESCENDING").stream():
-            p = doc.to_dict()
-            p["id"] = doc.id
-            lista.append(p)
+            post = doc.to_dict()
+            post["id"] = doc.id
+            lista.append(post)
         return JsonResponse({"posts": lista})
 
     elif request.method == "POST":
-        uid = request.user_firebase["uid"]
-        username = request.user_firebase["email"]
         data = json.loads(request.body)
-        print("[POST] Recibido contenido:", data)
-
         nuevo = {
-            "userId": uid,
-            "username": username,
             "content": data.get("content"),
             "photoURL": data.get("photoURL"),
             "timestamp": datetime.utcnow(),
         }
-
         _, doc_ref = posts_ref.add(nuevo)
-        print(f"[POST] Post guardado con ID: {doc_ref.id}")
         return JsonResponse({"mensaje": "Post creado", "id": doc_ref.id})
 
     return JsonResponse({"error": "Método no permitido"}, status=405)
 
-@csrf_exempt
-def posts_by_user(request, uid):
-    if request.method != "GET":
-        return JsonResponse({"error": "Método no permitido"}, status=405)
-
-    posts_ref = db.collection("posts").where("userId", "==", uid)
-    lista = []
-    for doc in posts_ref.order_by("timestamp", direction="DESCENDING").stream():
-        post = doc.to_dict()
-        post["id"] = doc.id
-        lista.append(post)
-    return JsonResponse({"posts": lista})
-
 
 @csrf_exempt
 @firebase_login_required
-def post_detail(request, post_id):
-    doc_ref = db.collection("posts").document(post_id)
+def user_post_detail(request, post_id):
+    """
+    PUT    /profile/posts/<post_id>/     → Actualiza un post
+    DELETE /profile/posts/<post_id>/     → Elimina un post
+    """
+    uid = request.user_firebase["uid"]
+    doc_ref = (
+        db.collection("profiles").document(uid).collection("posts").document(post_id)
+    )
 
     if request.method == "PUT":
         data = json.loads(request.body)
-        doc_ref.update({
-            "content": data.get("content"),
-            "photoURL": data.get("photoURL"),
-            "timestamp": datetime.utcnow(),
-        })
+        doc_ref.update(
+            {
+                "content": data.get("content"),
+                "photoURL": data.get("photoURL"),
+                "timestamp": datetime.utcnow(),
+            }
+        )
         return JsonResponse({"mensaje": "Post actualizado"})
 
     elif request.method == "DELETE":
@@ -302,14 +302,21 @@ def comments(request, post_id):
 @csrf_exempt
 @firebase_login_required
 def comment_detail(request, post_id, comment_id):
-    comment_ref = db.collection("posts").document(post_id).collection("comments").document(comment_id)
+    comment_ref = (
+        db.collection("posts")
+        .document(post_id)
+        .collection("comments")
+        .document(comment_id)
+    )
 
     if request.method == "PUT":
         data = json.loads(request.body)
-        comment_ref.update({
-            "message": data.get("message"),
-            "timestamp": datetime.utcnow(),
-        })
+        comment_ref.update(
+            {
+                "message": data.get("message"),
+                "timestamp": datetime.utcnow(),
+            }
+        )
         return JsonResponse({"mensaje": "Comentario actualizado"})
 
     elif request.method == "DELETE":
