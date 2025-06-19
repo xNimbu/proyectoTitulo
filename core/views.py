@@ -220,6 +220,8 @@ def posts(request):
         uid = request.user_firebase["uid"]
         username = request.user_firebase["email"]
         data = json.loads(request.body)
+        print("[POST] Recibido contenido:", data)
+
         nuevo = {
             "userId": uid,
             "username": username,
@@ -227,7 +229,9 @@ def posts(request):
             "photoURL": data.get("photoURL"),
             "timestamp": datetime.utcnow(),
         }
+
         _, doc_ref = posts_ref.add(nuevo)
+        print(f"[POST] Post guardado con ID: {doc_ref.id}")
         return JsonResponse({"mensaje": "Post creado", "id": doc_ref.id})
 
     return JsonResponse({"error": "Método no permitido"}, status=405)
