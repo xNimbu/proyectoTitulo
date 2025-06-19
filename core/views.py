@@ -7,6 +7,8 @@ from firebase_admin import auth as firebase_auth
 from google.cloud import firestore
 from datetime import datetime
 from core.models import ChatMessage
+import requests
+import os
 
 from core import auth
 
@@ -214,8 +216,8 @@ def chat_history(request, room):
 @firebase_login_required
 def user_posts(request):
     """
-    GET  /profile/posts/        → Lista los posts del usuario autenticado
-    POST /profile/posts/        → Crea un nuevo post para el usuario
+    GET  /api/profile/posts/        → Lista los posts del usuario autenticado
+    POST /api/profile/posts/        → Crea un nuevo post con texto e imagen
     """
     uid = request.user_firebase["uid"]
     posts_ref = db.collection("profiles").document(uid).collection("posts")
@@ -229,16 +231,34 @@ def user_posts(request):
         return JsonResponse({"posts": lista})
 
     elif request.method == "POST":
-        data = json.loads(request.body)
+        content = request.POST.get("content", "")
+        photoURL = ""
+        image_file = request.FILES.get("image")
+
+        if image_file:
+            try:
+                imgbb_api_key = os.getenv("IMGBB_API_KEY")
+                upload = requests.post(
+                    "https://api.imgbb.com/1/upload",
+                    params={"key": imgbb_api_key},
+                    files={"image": image_file.read()},
+                )
+                if upload.status_code == 200:
+                    photoURL = upload.json()["data"]["url"]
+            except Exception as e:
+                return JsonResponse({"error": f"Error subiendo imagen: {str(e)}"}, status=400)
+
         nuevo = {
-            "content": data.get("content"),
-            "photoURL": data.get("photoURL"),
+            "content": content,
+            "photoURL": photoURL,
             "timestamp": datetime.utcnow(),
         }
+
         _, doc_ref = posts_ref.add(nuevo)
         return JsonResponse({"mensaje": "Post creado", "id": doc_ref.id})
 
     return JsonResponse({"error": "Método no permitido"}, status=405)
+
 
 
 @csrf_exempt
