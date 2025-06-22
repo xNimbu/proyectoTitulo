@@ -364,3 +364,63 @@ def comment_detail(request, post_id, comment_id):
         return JsonResponse({"mensaje": "Comentario eliminado"})
 
     return JsonResponse({"error": "Método no permitido"}, status=405)
+
+
+@csrf_exempt
+@firebase_login_required
+def friends(request):
+    """
+    GET    /api/profile/friends/        → lista todos los amigos del usuario autenticado
+    POST   /api/profile/friends/        → agrega un amigo (por uid)
+    """
+    uid = request.user_firebase["uid"]
+    friends_col = db.collection("profiles").document(uid).collection("friends")
+
+    if request.method == "GET":
+        amigos = []
+        for friend_snap in friends_col.stream():
+            f = friend_snap.to_dict()
+            f["uid"] = friend_snap.id
+            amigos.append(f)
+        return JsonResponse({"friends": amigos})
+
+    elif request.method == "POST":
+        data = json.loads(request.body)
+        friend_uid = data.get("friendUid")
+        if not friend_uid or friend_uid == uid:
+            return JsonResponse({"error": "UID inválido"}, status=400)
+
+        # opcional: buscar datos del perfil del amigo para almacenarlos
+        perfil_amigo = db.collection("profiles").document(friend_uid).get()
+        if not perfil_amigo.exists:
+            return JsonResponse({"error": "Perfil de amigo no encontrado"}, status=404)
+        info = perfil_amigo.to_dict()
+        nuevo = {
+            "username": info.get("username", ""),
+            "avatar": info.get("photoURL", ""),
+            "addedAt": firestore.SERVER_TIMESTAMP,
+        }
+        # guarda bajo documento con ID = friend_uid
+        friends_col.document(friend_uid).set(nuevo)
+        return JsonResponse({"mensaje": "Amigo agregado", "uid": friend_uid}, status=201)
+
+    return JsonResponse({"error": "Método no permitido"}, status=405)
+
+
+@csrf_exempt
+@firebase_login_required
+def friend_detail(request, friend_uid):
+    """
+    DELETE /api/profile/friends/<friend_uid>/   → elimina ese amigo
+    """
+    uid = request.user_firebase["uid"]
+    friend_ref = db.collection("profiles").document(uid).collection("friends").document(friend_uid)
+
+    if request.method == "DELETE":
+        # comprueba existencia (opcional)
+        if not friend_ref.get().exists:
+            return JsonResponse({"error": "Amigo no encontrado"}, status=404)
+        friend_ref.delete()
+        return JsonResponse({"mensaje": "Amigo eliminado"})
+
+    return JsonResponse({"error": "Método no permitido"}, status=405)

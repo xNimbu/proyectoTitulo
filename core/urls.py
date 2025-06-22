@@ -12,10 +12,8 @@ urlpatterns = [
     path("chat/<str:room>/history/", views.chat_history, name="chat_history"),
     path("profile/posts/", views.user_posts),
     path("profile/posts/<str:post_id>/", views.user_post_detail),
-    path(
-        "posts/<str:post_id>/comments/", views.comments
-    ),
-    path(
-        "posts/<str:post_id>/comments/<str:comment_id>/", views.comment_detail
-    ),
+    path("posts/<str:post_id>/comments/", views.comments),
+    path("posts/<str:post_id>/comments/<str:comment_id>/", views.comment_detail),
+    path("api/profile/friends/", views.friends),
+    path("api/profile/friends/<str:friend_uid>/", views.friend_detail),
 ]
