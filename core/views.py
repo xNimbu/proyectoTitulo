@@ -9,6 +9,7 @@ from datetime import datetime
 from core.models import ChatMessage
 import requests
 import os
+from google.cloud import firestore
 
 from core import auth
 
@@ -64,7 +65,7 @@ def crear_usuario(request):
 @firebase_login_required
 def profile(request):
     """
-    GET  /api/profile/        → devuelve perfil + lista de mascotas
+    GET  /api/profile/        → devuelve perfil + lista de mascotas + lista de posts
     POST /api/profile/        → crea/actualiza perfil
     """
     uid = request.user_firebase["uid"]
@@ -77,13 +78,24 @@ def profile(request):
             return JsonResponse({"error": "Perfil no encontrado"}, status=404)
         profile_data = snap.to_dict()
 
-        # Traer mascotas
+        # 1) Traer mascotas
         pets = []
         for pet_snap in doc_ref.collection("pets").stream():
             p = pet_snap.to_dict()
             p["id"] = pet_snap.id
             pets.append(p)
         profile_data["pets"] = pets
+
+        # 2) Traer publicaciones (posts), ordenadas por timestamp descendente
+        posts = []
+        posts_ref = doc_ref.collection("posts")
+        # para usar order_by necesitas importar:
+        # from google.cloud import firestore
+        for post_snap in posts_ref.order_by("timestamp", direction=firestore.Query.DESCENDING).stream():
+            post = post_snap.to_dict()
+            post["id"] = post_snap.id
+            posts.append(post)
+        profile_data["posts"] = posts
 
         return JsonResponse(profile_data)
 
