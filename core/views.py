@@ -60,7 +60,7 @@ def crear_usuario(request):
         email = data["email"]
         password = data["password"]
         nombre = data.get("nombre", "")
-        role = data.get("role", "user")  # user/admin/service
+        role = data.get("role", "user")
 
         # Crear usuario en Auth
         user = auth.create_user(
@@ -279,8 +279,8 @@ def user_posts(request):
 @firebase_login_required
 def user_post_detail(request, post_id):
     """
-    PUT    /profile/posts/<post_id>/ → actualiza post
-    DELETE /profile/posts/<post_id>/ → elimina post
+    PUT    /api/profile/posts/<post_id>/ → actualiza post
+    DELETE /api/profile/posts/<post_id>/ → elimina post
     """
     uid = request.user_firebase["uid"]
     doc = db.collection("profiles").document(uid).collection("posts").document(post_id)
@@ -308,8 +308,8 @@ def user_post_detail(request, post_id):
 @firebase_login_required
 def comments(request, post_id):
     """
-    GET  /profile/posts/<post_id>/comments/ → lista comentarios
-    POST /profile/posts/<post_id>/comments/ → crea comentario
+    GET  /api/profile/posts/<post_id>/comments/ → lista comentarios
+    POST /api/profile/posts/<post_id>/comments/ → crea comentario
     """
     col = db.collection("posts").document(post_id).collection("comments")
 
@@ -339,8 +339,8 @@ def comments(request, post_id):
 @firebase_login_required
 def comment_detail(request, post_id, comment_id):
     """
-    PUT    /posts/<post_id>/comments/<comment_id>/ → actualiza comentario
-    DELETE /posts/<post_id>/comments/<comment_id>/ → elimina comentario
+    PUT    /api/posts/<post_id>/comments/<comment_id>/ → actualiza comentario
+    DELETE /api/posts/<post_id>/comments/<comment_id>/ → elimina comentario
     """
     ref = db.collection("posts").document(post_id).collection("comments").document(comment_id)
 
@@ -357,14 +357,76 @@ def comment_detail(request, post_id, comment_id):
     return JsonResponse({"error": "Método no permitido"}, status=405)
 
 # --------------------------------------------------------------------------------
-# Friends / Followers CRUD
+# Friends CRUD
+# --------------------------------------------------------------------------------
+
+@csrf_exempt
+@firebase_login_required
+def friends(request):
+    """
+    GET  /api/profile/friends/               → Listar amigos
+    POST /api/profile/friends/               → Agregar un amigo
+    """
+    uid = request.user_firebase["uid"]
+    profile_ref = db.collection("profiles").document(uid)
+    col = profile_ref.collection("friends")
+
+    if request.method == "GET":
+        items = []
+        for snap in col.stream():
+            d = snap.to_dict()
+            d["uid"] = snap.id
+            items.append(d)
+        return JsonResponse({"friends": items})
+
+    elif request.method == "POST":
+        data = json.loads(request.body)
+        target_uid = data.get("uid")
+        if not target_uid or target_uid == uid:
+            return JsonResponse({"error": "UID inválido"}, status=400)
+
+        other_snap = db.collection("profiles").document(target_uid).get()
+        if not other_snap.exists:
+            return JsonResponse({"error": "Perfil no encontrado"}, status=404)
+
+        other = other_snap.to_dict()
+        record = {
+            "username": other.get("username", ""),
+            "avatar": other.get("photoURL", ""),
+            "addedAt": firestore.SERVER_TIMESTAMP,
+        }
+        col.document(target_uid).set(record)
+        return JsonResponse({"mensaje": "Amigo agregado", "uid": target_uid}, status=201)
+
+    return JsonResponse({"error": "Método no permitido"}, status=405)
+
+@csrf_exempt
+@firebase_login_required
+def friend_detail(request, friend_uid):
+    """
+    DELETE /api/profile/friends/<friend_uid>/ → Eliminar amigo
+    """
+    if request.method != "DELETE":
+        return JsonResponse({"error": "Método no permitido"}, status=405)
+
+    uid = request.user_firebase["uid"]
+    ref = db.collection("profiles").document(uid).collection("friends").document(friend_uid)
+
+    if not ref.get().exists:
+        return JsonResponse({"error": "Amigo no encontrado"}, status=404)
+
+    ref.delete()
+    return JsonResponse({"mensaje": "Amigo eliminado"})
+
+# --------------------------------------------------------------------------------
+# Followers/Friends Relations CRUD
 # --------------------------------------------------------------------------------
 
 @csrf_exempt
 @firebase_login_required
 def relations(request, other_uid=None):
     """
-    GET    /api/profile/relations/          → lista amigos o seguidores
+    GET    /api/profile/relations/          → lista amigos o seguidores según role
     POST   /api/profile/relations/          → agrega
     DELETE /api/profile/relations/<uid>/    → elimina
     """
