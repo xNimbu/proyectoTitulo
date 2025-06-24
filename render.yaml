@@ -1,7 +1,7 @@
 services:
   # (opcional) si quieres declarar tu Redis en IaC:
   - type: redis
-    name: redis
+    name: redis-chat
     plan: starter
 
   - type: web

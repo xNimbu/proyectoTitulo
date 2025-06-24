@@ -11,9 +11,11 @@ import os
 from django.core.asgi import get_asgi_application
 from channels.routing import ProtocolTypeRouter, URLRouter
 from channels.auth import AuthMiddlewareStack
+from channels_redis.core import RedisChannelLayer
 import core.routing
 
 os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'backend.settings')
+layer = RedisChannelLayer({"hosts": [os.getenv("REDIS_URL")]})
 
 application = ProtocolTypeRouter({
     "http": get_asgi_application(),

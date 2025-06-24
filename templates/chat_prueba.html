@@ -1,5 +1,6 @@
 <!DOCTYPE html>
 <html lang="es">
+
 <head>
   <meta charset="UTF-8">
   <title>Chat Prueba</title>
@@ -8,6 +9,7 @@
       font-family: sans-serif;
       margin: 2rem;
     }
+
     #chat-log {
       border: 1px solid #ccc;
       height: 300px;
@@ -16,18 +18,22 @@
       margin-bottom: 1rem;
       background: #fafafa;
     }
+
     #chat-log div {
       margin-bottom: 0.5rem;
     }
+
     #chat-message-input {
       width: 80%;
       padding: 0.5rem;
       font-size: 1rem;
     }
+
     #chat-message-submit {
       padding: 0.6rem 1rem;
       font-size: 1rem;
     }
+
     #status {
       margin-bottom: 1rem;
       font-style: italic;
@@ -35,6 +41,7 @@
     }
   </style>
 </head>
+
 <body>
   <h1>Chat Prueba</h1>
   <div id="status">Conectando…</div>
@@ -45,17 +52,19 @@
 
   <script>
     const statusEl = document.getElementById('status');
-    const inputEl  = document.getElementById('chat-message-input');
-    const btnEl    = document.getElementById('chat-message-submit');
+    const inputEl = document.getElementById('chat-message-input');
+    const btnEl = document.getElementById('chat-message-submit');
 
     // Creamos el WebSocket
-    const chatSocket = new WebSocket('ws://127.0.0.1:8000/ws/chat/prueba');
+    const proto = location.protocol === 'https:' ? 'wss' : 'ws';
+    const socketUrl = `${proto}://${location.host}/ws/chat/prueba/`;
+    const chatSocket = new WebSocket(socketUrl);
 
     // Cuando abra, habilitamos UI
     chatSocket.addEventListener('open', () => {
       statusEl.textContent = 'Conectado';
       inputEl.disabled = false;
-      btnEl.disabled   = false;
+      btnEl.disabled = false;
       inputEl.focus();
     });
 
@@ -71,7 +80,7 @@
     chatSocket.addEventListener('close', () => {
       statusEl.textContent = 'Desconectado';
       inputEl.disabled = true;
-      btnEl.disabled   = true;
+      btnEl.disabled = true;
     });
 
     chatSocket.addEventListener('error', (err) => {
@@ -99,4 +108,5 @@
     });
   </script>
 </body>
+
 </html>
