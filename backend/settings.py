@@ -12,6 +12,7 @@ https://docs.djangoproject.com/en/5.1/ref/settings/
 
 import os
 from pathlib import Path
+import logging
 
 # ------------------------------------------------------------------------------
 # Paths
@@ -24,16 +25,14 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 # ------------------------------------------------------------------------------
 
 SECRET_KEY = os.getenv(
-    'SECRET_KEY',
-    'django-insecure-d+j2xsj=qo2vfiybnz8xi1))=z@7wg3w=pg%*bf3m!(gswl=04'
+    "SECRET_KEY", "django-insecure-d+j2xsj=qo2vfiybnz8xi1))=z@7wg3w=pg%*bf3m!(gswl=04"
 )
 
-DEBUG = os.getenv('DEBUG', 'False') == 'True'
+DEBUG = os.getenv("DEBUG", "False") == "True"
 
 ALLOWED_HOSTS = os.getenv(
-    'ALLOWED_HOSTS',
-    'localhost,proyectotitulo.onrender.com'
-).split(',')
+    "ALLOWED_HOSTS", "localhost,proyectotitulo.onrender.com"
+).split(",")
 
 # ------------------------------------------------------------------------------
 # Application definition
@@ -41,35 +40,33 @@ ALLOWED_HOSTS = os.getenv(
 
 INSTALLED_APPS = [
     # Django contrib
-    'django.contrib.admin',
-    'django.contrib.auth',
-    'django.contrib.contenttypes',
-    'django.contrib.sessions',
-    'django.contrib.messages',
-    'django.contrib.staticfiles',
-
+    "django.contrib.admin",
+    "django.contrib.auth",
+    "django.contrib.contenttypes",
+    "django.contrib.sessions",
+    "django.contrib.messages",
+    "django.contrib.staticfiles",
     # Third-party
-    'rest_framework',
-    'corsheaders',
-    'channels',
-
+    "rest_framework",
+    "corsheaders",
+    "channels",
     # Local apps
-    'core',
+    "core",
 ]
 
 MIDDLEWARE = [
-    'corsheaders.middleware.CorsMiddleware',  # Must be high in the list
-    'django.middleware.security.SecurityMiddleware',
-    'whitenoise.middleware.WhiteNoiseMiddleware',
-    'django.contrib.sessions.middleware.SessionMiddleware',
-    'django.middleware.common.CommonMiddleware',
-    'django.middleware.csrf.CsrfViewMiddleware',
-    'django.contrib.auth.middleware.AuthenticationMiddleware',
-    'django.contrib.messages.middleware.MessageMiddleware',
-    'django.middleware.clickjacking.XFrameOptionsMiddleware',
+    "corsheaders.middleware.CorsMiddleware",  # Must be high in the list
+    "django.middleware.security.SecurityMiddleware",
+    "whitenoise.middleware.WhiteNoiseMiddleware",
+    "django.contrib.sessions.middleware.SessionMiddleware",
+    "django.middleware.common.CommonMiddleware",
+    "django.middleware.csrf.CsrfViewMiddleware",
+    "django.contrib.auth.middleware.AuthenticationMiddleware",
+    "django.contrib.messages.middleware.MessageMiddleware",
+    "django.middleware.clickjacking.XFrameOptionsMiddleware",
 ]
 
-ROOT_URLCONF = 'backend.urls'
+ROOT_URLCONF = "backend.urls"
 
 # CORS
 CORS_ALLOWED_ORIGINS = [
@@ -95,18 +92,42 @@ CORS_ALLOW_METHODS = [
 CORS_ALLOW_CREDENTIALS = True
 
 # Channels (ASGI + WebSockets)
-ASGI_APPLICATION = 'backend.asgi.application'
+ASGI_APPLICATION = "backend.asgi.application"
 CHANNEL_LAYERS = {
-    'default': {
-        'BACKEND': 'channels_redis.core.RedisChannelLayer',
-        'CONFIG': {
-            'hosts': [os.getenv('REDIS_URL', 'redis://127.0.0.1:6379')],
+    "default": {
+        "BACKEND": "channels_redis.core.RedisChannelLayer",
+        "CONFIG": {
+            "hosts": [{"address": os.getenv("REDIS_URL"), "ssl": {}}],
+        },
+    },
+}
+
+logger = logging.getLogger(__name__)
+logger.warning("▶️ REDIS_URL = %s", os.getenv("REDIS_URL"))
+
+LOGGING = {
+    "version": 1,
+    "disable_existing_loggers": False,
+    "handlers": {
+        "console": {
+            "class": "logging.StreamHandler",
+        },
+    },
+    "loggers": {
+        # Logging de Channels y Daphne
+        "channels": {
+            "handlers": ["console"],
+            "level": "DEBUG",
+        },
+        "daphne": {
+            "handlers": ["console"],
+            "level": "DEBUG",
         },
     },
 }
 
 # WSGI (for non-WebSocket fallback)
-WSGI_APPLICATION = 'backend.wsgi.application'
+WSGI_APPLICATION = "backend.wsgi.application"
 
 # ------------------------------------------------------------------------------
 # Templates
@@ -114,15 +135,15 @@ WSGI_APPLICATION = 'backend.wsgi.application'
 
 TEMPLATES = [
     {
-        'BACKEND': 'django.template.backends.django.DjangoTemplates',
-        'DIRS': [BASE_DIR / 'templates'],  # add your template dirs here
-        'APP_DIRS': True,
-        'OPTIONS': {
-            'context_processors': [
-                'django.template.context_processors.debug',
-                'django.template.context_processors.request',
-                'django.contrib.auth.context_processors.auth',
-                'django.contrib.messages.context_processors.messages',
+        "BACKEND": "django.template.backends.django.DjangoTemplates",
+        "DIRS": [BASE_DIR / "templates"],  # add your template dirs here
+        "APP_DIRS": True,
+        "OPTIONS": {
+            "context_processors": [
+                "django.template.context_processors.debug",
+                "django.template.context_processors.request",
+                "django.contrib.auth.context_processors.auth",
+                "django.contrib.messages.context_processors.messages",
             ],
         },
     },
@@ -133,9 +154,9 @@ TEMPLATES = [
 # ------------------------------------------------------------------------------
 
 DATABASES = {
-    'default': {
-        'ENGINE': 'django.db.backends.sqlite3',
-        'NAME': BASE_DIR / 'db.sqlite3',
+    "default": {
+        "ENGINE": "django.db.backends.sqlite3",
+        "NAME": BASE_DIR / "db.sqlite3",
     }
 }
 
@@ -145,16 +166,16 @@ DATABASES = {
 
 AUTH_PASSWORD_VALIDATORS = [
     {
-        'NAME': 'django.contrib.auth.password_validation.UserAttributeSimilarityValidator',
+        "NAME": "django.contrib.auth.password_validation.UserAttributeSimilarityValidator",
     },
     {
-        'NAME': 'django.contrib.auth.password_validation.MinimumLengthValidator',
+        "NAME": "django.contrib.auth.password_validation.MinimumLengthValidator",
     },
     {
-        'NAME': 'django.contrib.auth.password_validation.CommonPasswordValidator',
+        "NAME": "django.contrib.auth.password_validation.CommonPasswordValidator",
     },
     {
-        'NAME': 'django.contrib.auth.password_validation.NumericPasswordValidator',
+        "NAME": "django.contrib.auth.password_validation.NumericPasswordValidator",
     },
 ]
 
@@ -162,8 +183,8 @@ AUTH_PASSWORD_VALIDATORS = [
 # Internationalization
 # ------------------------------------------------------------------------------
 
-LANGUAGE_CODE = 'en-us'
-TIME_ZONE = 'UTC'
+LANGUAGE_CODE = "en-us"
+TIME_ZONE = "UTC"
 USE_I18N = True
 USE_TZ = True
 
@@ -171,11 +192,11 @@ USE_TZ = True
 # Static files (CSS, JavaScript, Images)
 # ------------------------------------------------------------------------------
 
-STATIC_URL = '/static/'
-STATIC_ROOT = BASE_DIR / 'staticfiles'
+STATIC_URL = "/static/"
+STATIC_ROOT = BASE_DIR / "staticfiles"
 
 # ------------------------------------------------------------------------------
 # Default primary key field type
 # ------------------------------------------------------------------------------
 
-DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
+DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
