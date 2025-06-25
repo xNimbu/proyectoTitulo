@@ -138,6 +138,17 @@ def profile(request):
             posts.append(post)
         profile_data["posts"] = posts
 
+        friends = []
+        for friend_snap in doc_ref.collection("friends").stream():
+            f = friend_snap.to_dict()
+            friends.append({
+                "uid": friend_snap.id,
+                "username": f.get("username", ""),
+                "avatar": f.get("avatar", ""),
+                "addedAt": f.get("addedAt"),
+            })
+        profile_data["friends"] = friends
+
         return JsonResponse(profile_data)
 
     elif request.method in ("POST", "PUT"):
