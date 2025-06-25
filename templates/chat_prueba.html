@@ -79,7 +79,7 @@
 
       const proto = location.protocol === 'https:' ? 'wss' : 'ws';
       const roomName = 'prueba';
-      const socketUrl = `${proto}://${location.host}/ws/chat/${roomName}/?token=${encodeURIComponent(token)}`;
+      const socketUrl = `${proto}://${location.host}/ws/chat/${roomName}/`;
 
       // Si ya había un socket, ciérralo antes de abrir otro
       if (chatSocket) {
@@ -90,6 +90,12 @@
       chatSocket = new WebSocket(socketUrl);
 
       chatSocket.addEventListener('open', () => {
+        // 1) Envía primero tu mensaje de autenticación
+        chatSocket.send(JSON.stringify({
+          type: 'auth',
+          token: tokenEl.value.trim()
+        }));
+        // 2) Luego habilitas la UI
         statusEl.textContent = 'Conectado';
         inputEl.disabled = false;
         btnEl.disabled = false;
