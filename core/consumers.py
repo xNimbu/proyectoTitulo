@@ -46,7 +46,14 @@ class ChatConsumer(AsyncWebsocketConsumer):
             await self.channel_layer.group_add(self.room_group, self.channel_name)
 
             # Enviamos ACK de autenticación
-            await self.send_json({"type": "auth.success", "message": "Authenticated"})
+            await self.send(
+                text_data=json.dumps(
+                    {
+                        "type": "auth.success",
+                        "message": "Authenticated",
+                    }
+                )
+            )
 
             # Enviamos historial hasta 50 mensajes
             try:
@@ -61,13 +68,13 @@ class ChatConsumer(AsyncWebsocketConsumer):
 
                 history = await database_sync_to_async(fetch_history)()
                 for msg in history:
-                    await self.send_json(
+                    await self.send(text_data=json.dumps(
                         {
                             "type": "history",
                             "user": msg["user"],
                             "message": msg["message"],
                         }
-                    )
+                    ))
             except Exception as e:
                 logger.error("Error al recuperar historial: %s", e)
 
@@ -99,13 +106,13 @@ class ChatConsumer(AsyncWebsocketConsumer):
 
     async def chat_message(self, event):
         # Handler para reenviar mensajes del grupo al cliente
-        await self.send_json(
+        await self.send(text_data=json.dumps(
             {
                 "type": "chat.message",
                 "user": event["user"],
                 "message": event["message"],
             }
-        )
+        ))
 
     async def disconnect(self, code):
         if hasattr(self, "room_group"):
