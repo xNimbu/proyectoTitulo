@@ -23,16 +23,16 @@
       margin-bottom: 0.5rem;
     }
 
-    #chat-message-input,
-    #token-input {
+    #token-input,
+    #chat-message-input {
       width: 80%;
       padding: 0.5rem;
       font-size: 1rem;
       margin-bottom: 0.5rem;
     }
 
-    #chat-message-submit,
-    #connect-btn {
+    #connect-btn,
+    #chat-message-submit {
       padding: 0.6rem 1rem;
       font-size: 1rem;
       margin-left: 0.5rem;
@@ -63,12 +63,14 @@
 
   <script>
     const statusEl = document.getElementById('status');
-    const inputEl = document.getElementById('chat-message-input');
-    const btnEl = document.getElementById('chat-message-submit');
     const tokenEl = document.getElementById('token-input');
     const connectBtn = document.getElementById('connect-btn');
+    const chatLog = document.getElementById('chat-log');
+    const inputEl = document.getElementById('chat-message-input');
+    const sendBtn = document.getElementById('chat-message-submit');
 
     let chatSocket = null;
+    let authenticated = false;
 
     connectBtn.addEventListener('click', () => {
       const token = tokenEl.value.trim();
@@ -79,59 +81,72 @@
 
       const proto = location.protocol === 'https:' ? 'wss' : 'ws';
       const roomName = 'prueba';
-      const socketUrl = `${proto}://${location.host}/ws/chat/${roomName}/`;
+      const url = `${proto}://${location.host}/ws/chat/${roomName}/`;
 
-      // Si ya había un socket, ciérralo antes de abrir otro
-      if (chatSocket) {
-        chatSocket.close();
-      }
-
+      // Limpia log y estado
+      chatLog.innerHTML = '';
       statusEl.textContent = 'Conectando…';
-      chatSocket = new WebSocket(socketUrl);
+      authenticated = false;
+      inputEl.disabled = true;
+      sendBtn.disabled = true;
 
+      // Cierra socket anterior si existe
+      if (chatSocket) chatSocket.close();
+
+      // Abre nuevo websocket
+      chatSocket = new WebSocket(url);
+
+      // Al abrir, envía auth
       chatSocket.addEventListener('open', () => {
-        // 1) Envía primero tu mensaje de autenticación
-        chatSocket.send(JSON.stringify({
-          type: 'auth',
-          token: tokenEl.value.trim()
-        }));
-        // 2) Luego habilitas la UI
-        statusEl.textContent = 'Conectado';
-        inputEl.disabled = false;
-        btnEl.disabled = false;
-        inputEl.focus();
+        chatSocket.send(JSON.stringify({ type: 'auth', token }));
       });
 
+      // Al recibir cualquier mensaje
       chatSocket.addEventListener('message', (e) => {
         const data = JSON.parse(e.data);
-        const log = document.getElementById('chat-log');
-        const msg = document.createElement('div');
-        msg.textContent = `${data.user}: ${data.message}`;
-        log.appendChild(msg);
-        log.scrollTop = log.scrollHeight;
+
+        // Si no está autenticado aún, el primer mensaje viene tras auth
+        if (!authenticated) {
+          authenticated = true;
+          statusEl.textContent = 'Conectado';
+          inputEl.disabled = false;
+          sendBtn.disabled = false;
+          inputEl.focus();
+          return;  // no mostramos este mensaje en el log
+        }
+
+        // Mensajes normales de chat
+        const msgEl = document.createElement('div');
+        msgEl.textContent = `${data.user}: ${data.message}`;
+        chatLog.appendChild(msgEl);
+        chatLog.scrollTop = chatLog.scrollHeight;
       });
 
-      chatSocket.addEventListener('close', () => {
-        statusEl.textContent = 'Desconectado';
+      // Cuando se cierra la conexión
+      chatSocket.addEventListener('close', (e) => {
+        console.log('WebSocket cerrado con code:', e.code);
+        statusEl.textContent = `Desconectado (code ${e.code})`;
         inputEl.disabled = true;
-        btnEl.disabled = true;
+        sendBtn.disabled = true;
       });
 
+      // Errores de conexión
       chatSocket.addEventListener('error', (err) => {
         console.error('Error en WebSocket:', err);
         statusEl.textContent = 'Error de conexión';
       });
     });
 
+    // Envía mensaje al pulsar botón o Enter
     function sendMessage() {
       const text = inputEl.value.trim();
-      if (!text || !(chatSocket && chatSocket.readyState === WebSocket.OPEN)) return;
+      if (!text || !authenticated || chatSocket.readyState !== WebSocket.OPEN) return;
       chatSocket.send(JSON.stringify({ message: text }));
       inputEl.value = '';
     }
 
-    btnEl.addEventListener('click', sendMessage);
-    inputEl.addEventListener('keyup', e => {
+    sendBtn.addEventListener('click', sendMessage);
+    inputEl.addEventListener('keyup', (e) => {
       if (e.key === 'Enter') sendMessage();
     });
   </script>
