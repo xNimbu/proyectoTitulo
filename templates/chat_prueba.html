@@ -57,7 +57,7 @@
 
     const proto = location.protocol === 'https:' ? 'wss' : 'ws';
     const roomName = 'prueba';
-    const socketUrl = `${proto}://${location.host}/ws/chat/${roomName}/`;
+    const socketUrl = `${proto}://${location.host}/ws/chat/${roomName}/`;  // ← nota el “/chat/prueba/”
     const chatSocket = new WebSocket(socketUrl);
 
     // Cuando abra, habilitamos UI

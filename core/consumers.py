@@ -2,6 +2,10 @@
 from channels.generic.websocket import AsyncWebsocketConsumer
 from urllib.parse import parse_qs
 import json
+import firebase_admin
+from firebase_admin import auth as fb_auth
+from channels.db import database_sync_to_async
+from core.models import ChatMessage
 
 class ChatConsumer(AsyncWebsocketConsumer):
     async def connect(self):
@@ -22,7 +26,7 @@ class ChatConsumer(AsyncWebsocketConsumer):
         self.username = decoded.get("name") or decoded.get("email") or self.user_id
 
         # 4) Continuar con la lógica normal de la sala
-        self.room = self.scope['url_route']['kwargs']['room']
+        self.room = self.scope['url_route']['kwargs']['room_name']
         self.room_group = f'chat_{self.room}'
         await self.channel_layer.group_add(self.room_group, self.channel_name)
         await self.accept()
