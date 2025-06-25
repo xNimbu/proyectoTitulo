@@ -105,19 +105,10 @@
       chatSocket.addEventListener('message', (e) => {
         const data = JSON.parse(e.data);
 
-        // Si no está autenticado aún, el primer mensaje viene tras auth
-        if (!authenticated) {
-          authenticated = true;
-          statusEl.textContent = 'Conectado';
-          inputEl.disabled = false;
-          sendBtn.disabled = false;
-          inputEl.focus();
-          return;  // no mostramos este mensaje en el log
-        }
-
-        // Mensajes normales de chat
+        // Si es parte del historial, opcionalmente lo marcas distinto
+        const prefix = data.history ? '[hist] ' : '';
         const msgEl = document.createElement('div');
-        msgEl.textContent = `${data.user}: ${data.message}`;
+        msgEl.textContent = `${prefix}${data.user}: ${data.message}`;
         chatLog.appendChild(msgEl);
         chatLog.scrollTop = chatLog.scrollHeight;
       });
