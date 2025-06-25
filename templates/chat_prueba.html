@@ -23,15 +23,19 @@
       margin-bottom: 0.5rem;
     }
 
-    #chat-message-input {
+    #chat-message-input,
+    #token-input {
       width: 80%;
       padding: 0.5rem;
       font-size: 1rem;
+      margin-bottom: 0.5rem;
     }
 
-    #chat-message-submit {
+    #chat-message-submit,
+    #connect-btn {
       padding: 0.6rem 1rem;
       font-size: 1rem;
+      margin-left: 0.5rem;
     }
 
     #status {
@@ -44,7 +48,14 @@
 
 <body>
   <h1>Chat Prueba</h1>
-  <div id="status">Conectando…</div>
+
+  <!-- Input para el token -->
+  <div>
+    <input id="token-input" type="text" placeholder="Pega aquí tu Firebase ID Token">
+    <button id="connect-btn">Conectar</button>
+  </div>
+
+  <div id="status">Esperando conexión…</div>
   <div id="chat-log"></div>
 
   <input id="chat-message-input" type="text" placeholder="Escribe tu mensaje…" disabled>
@@ -54,54 +65,65 @@
     const statusEl = document.getElementById('status');
     const inputEl = document.getElementById('chat-message-input');
     const btnEl = document.getElementById('chat-message-submit');
+    const tokenEl = document.getElementById('token-input');
+    const connectBtn = document.getElementById('connect-btn');
 
-    const proto = location.protocol === 'https:' ? 'wss' : 'ws';
-    const roomName = 'prueba';
-    const socketUrl = `${proto}://${location.host}/ws/chat/${roomName}/`;  // ← nota el “/chat/prueba/”
-    const chatSocket = new WebSocket(socketUrl);
+    let chatSocket = null;
 
-    // Cuando abra, habilitamos UI
-    chatSocket.addEventListener('open', () => {
-      statusEl.textContent = 'Conectado';
-      inputEl.disabled = false;
-      btnEl.disabled = false;
-      inputEl.focus();
+    connectBtn.addEventListener('click', () => {
+      const token = tokenEl.value.trim();
+      if (!token) {
+        alert('Debes pegar primero tu Firebase ID Token.');
+        return;
+      }
+
+      const proto = location.protocol === 'https:' ? 'wss' : 'ws';
+      const roomName = 'prueba';
+      const socketUrl = `${proto}://${location.host}/ws/chat/${roomName}/?token=${encodeURIComponent(token)}`;
+
+      // Si ya había un socket, ciérralo antes de abrir otro
+      if (chatSocket) {
+        chatSocket.close();
+      }
+
+      statusEl.textContent = 'Conectando…';
+      chatSocket = new WebSocket(socketUrl);
+
+      chatSocket.addEventListener('open', () => {
+        statusEl.textContent = 'Conectado';
+        inputEl.disabled = false;
+        btnEl.disabled = false;
+        inputEl.focus();
+      });
+
+      chatSocket.addEventListener('message', (e) => {
+        const data = JSON.parse(e.data);
+        const log = document.getElementById('chat-log');
+        const msg = document.createElement('div');
+        msg.textContent = `${data.user}: ${data.message}`;
+        log.appendChild(msg);
+        log.scrollTop = log.scrollHeight;
+      });
+
+      chatSocket.addEventListener('close', () => {
+        statusEl.textContent = 'Desconectado';
+        inputEl.disabled = true;
+        btnEl.disabled = true;
+      });
+
+      chatSocket.addEventListener('error', (err) => {
+        console.error('Error en WebSocket:', err);
+        statusEl.textContent = 'Error de conexión';
+      });
     });
 
-    chatSocket.addEventListener('message', (e) => {
-      const data = JSON.parse(e.data);
-      const log = document.getElementById('chat-log');
-      const msg = document.createElement('div');
-      msg.textContent = data.message ?? JSON.stringify(data);
-      log.appendChild(msg);
-      log.scrollTop = log.scrollHeight;
-    });
-
-    chatSocket.addEventListener('close', () => {
-      statusEl.textContent = 'Desconectado';
-      inputEl.disabled = true;
-      btnEl.disabled = true;
-    });
-
-    chatSocket.addEventListener('error', (err) => {
-      console.error('Error en WebSocket:', err);
-    });
-
-    // Función para enviar
     function sendMessage() {
       const text = inputEl.value.trim();
-      if (!text) return;
-
-      // Solo enviamos si ya estamos en OPEN
-      if (chatSocket.readyState === WebSocket.OPEN) {
-        chatSocket.send(JSON.stringify({ message: text }));
-        inputEl.value = '';
-      } else {
-        console.warn('WebSocket no está listo. Estado:', chatSocket.readyState);
-      }
+      if (!text || !(chatSocket && chatSocket.readyState === WebSocket.OPEN)) return;
+      chatSocket.send(JSON.stringify({ message: text }));
+      inputEl.value = '';
     }
 
-    // Enviar con botón o Enter
     btnEl.addEventListener('click', sendMessage);
     inputEl.addEventListener('keyup', e => {
       if (e.key === 'Enter') sendMessage();
