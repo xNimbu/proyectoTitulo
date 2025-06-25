@@ -105,13 +105,24 @@
       chatSocket.addEventListener('message', (e) => {
         const data = JSON.parse(e.data);
 
-        // Si es parte del historial, opcionalmente lo marcas distinto
+        // caso auth.success
+        if (data.type === 'auth.success') {
+          authenticated = true;
+          statusEl.textContent = 'Conectado';
+          inputEl.disabled = false;
+          sendBtn.disabled = false;
+          inputEl.focus();
+          return;  // no pintamos este mensaje en el chat-log
+        }
+
+        // resto (historial o mensajes en vivo)
         const prefix = data.history ? '[hist] ' : '';
         const msgEl = document.createElement('div');
         msgEl.textContent = `${prefix}${data.user}: ${data.message}`;
         chatLog.appendChild(msgEl);
         chatLog.scrollTop = chatLog.scrollHeight;
       });
+
 
       // Cuando se cierra la conexión
       chatSocket.addEventListener('close', (e) => {
