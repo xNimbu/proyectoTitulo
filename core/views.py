@@ -19,6 +19,7 @@ from core.models import ChatMessage
 # Utility / Test Views
 # --------------------------------------------------------------------------------
 
+
 def hello_world(request):
     """
     GET /api/hello/ → prueba de escritura en Firestore
@@ -31,20 +32,22 @@ def hello_world(request):
     db.collection("usuarios").document("alex123").set(data)
     return JsonResponse({"mensaje": "Dato guardado en Firestore!"})
 
+
 @firebase_login_required
 def vista_protegida(request):
     """
     GET /api/protected/ → ejemplo de vista protegida
     """
     usuario = request.user_firebase
-    return JsonResponse({
-        "mensaje": f'Hola {usuario["email"]}, tienes acceso!',
-        "uid": usuario["uid"]
-    })
+    return JsonResponse(
+        {"mensaje": f'Hola {usuario["email"]}, tienes acceso!', "uid": usuario["uid"]}
+    )
+
 
 # --------------------------------------------------------------------------------
 # User Registration & Profile
 # --------------------------------------------------------------------------------
+
 
 @csrf_exempt
 def crear_usuario(request):
@@ -63,34 +66,36 @@ def crear_usuario(request):
         role = data.get("role", "user")
 
         # Crear usuario en Auth
-        user = auth.create_user(
-            email=email,
-            password=password,
-            display_name=nombre
-        )
+        user = auth.create_user(email=email, password=password, display_name=nombre)
 
         # Generar código numérico único
         timestamp = int(datetime.utcnow().timestamp())
         code = int(f"{timestamp}{random.randint(0,9)}")
 
         # Guardar perfil en Firestore
-        db.collection("profiles").document(user.uid).set({
-            "fullName": nombre,
-            "email": email,
-            "role": role,
-            "code": code,
-            "createdAt": datetime.utcnow(),
-        })
+        db.collection("profiles").document(user.uid).set(
+            {
+                "fullName": nombre,
+                "email": email,
+                "role": role,
+                "code": code,
+                "createdAt": datetime.utcnow(),
+            }
+        )
 
-        return JsonResponse({
-            "mensaje": "Usuario creado",
-            "uid": user.uid,
-            "role": role,
-            "code": code,
-        }, status=201)
+        return JsonResponse(
+            {
+                "mensaje": "Usuario creado",
+                "uid": user.uid,
+                "role": role,
+                "code": code,
+            },
+            status=201,
+        )
 
     except Exception as e:
         return JsonResponse({"error": str(e)}, status=400)
+
 
 @csrf_exempt
 @firebase_login_required
@@ -130,9 +135,11 @@ def profile(request):
 
         # Publicaciones
         posts = []
-        for post_snap in doc_ref.collection("posts").order_by(
-            "timestamp", direction=firestore.Query.DESCENDING
-        ).stream():
+        for post_snap in (
+            doc_ref.collection("posts")
+            .order_by("timestamp", direction=firestore.Query.DESCENDING)
+            .stream()
+        ):
             post = post_snap.to_dict()
             post["id"] = post_snap.id
             posts.append(post)
@@ -141,12 +148,14 @@ def profile(request):
         friends = []
         for friend_snap in doc_ref.collection("friends").stream():
             f = friend_snap.to_dict()
-            friends.append({
-                "uid": friend_snap.id,
-                "username": f.get("username", ""),
-                "avatar": f.get("avatar", ""),
-                "addedAt": f.get("addedAt"),
-            })
+            friends.append(
+                {
+                    "uid": friend_snap.id,
+                    "username": f.get("username", ""),
+                    "avatar": f.get("avatar", ""),
+                    "addedAt": f.get("addedAt"),
+                }
+            )
         profile_data["friends"] = friends
 
         return JsonResponse(profile_data)
@@ -165,25 +174,26 @@ def profile(request):
 
     return JsonResponse({"error": "Método no permitido"}, status=405)
 
+
 @csrf_exempt
 def profile_list(request):
-    q = request.GET.get('q','').lower()
+    q = request.GET.get("q", "").lower()
     perfiles = []
     for doc in db.collection("profiles").stream():
         data = doc.to_dict()
-        username = data.get("username","")
+        username = data.get("username", "")
         if q and q not in username.lower():
             continue
-        perfiles.append({
-            "uid": doc.id,
-            "username": username,
-            "avatar": data.get("photoURL","")
-        })
+        perfiles.append(
+            {"uid": doc.id, "username": username, "avatar": data.get("photoURL", "")}
+        )
     return JsonResponse(perfiles, safe=False)
+
 
 # --------------------------------------------------------------------------------
 # Pets CRUD
 # --------------------------------------------------------------------------------
+
 
 @csrf_exempt
 @firebase_login_required
@@ -217,6 +227,7 @@ def pets(request):
 
     return JsonResponse({"error": "Método no permitido"}, status=405)
 
+
 @csrf_exempt
 @firebase_login_required
 def pet_detail(request, pet_id):
@@ -238,9 +249,11 @@ def pet_detail(request, pet_id):
 
     return JsonResponse({"error": "Método no permitido"}, status=405)
 
+
 # --------------------------------------------------------------------------------
 # Posts & Comments CRUD
 # --------------------------------------------------------------------------------
+
 
 @csrf_exempt
 @firebase_login_required
@@ -254,7 +267,9 @@ def user_posts(request):
 
     if request.method == "GET":
         posts = []
-        for snap in col.order_by("timestamp", direction=firestore.Query.DESCENDING).stream():
+        for snap in col.order_by(
+            "timestamp", direction=firestore.Query.DESCENDING
+        ).stream():
             post = snap.to_dict()
             post["id"] = snap.id
             posts.append(post)
@@ -269,7 +284,7 @@ def user_posts(request):
             resp = requests.post(
                 "https://api.imgbb.com/1/upload",
                 params={"key": api_key},
-                files={"image": image_file.read()}
+                files={"image": image_file.read()},
             )
             if resp.status_code == 200:
                 photoURL = resp.json()["data"]["url"]
@@ -282,6 +297,7 @@ def user_posts(request):
         return JsonResponse({"mensaje": "Post creado", "id": doc_ref.id}, status=201)
 
     return JsonResponse({"error": "Método no permitido"}, status=405)
+
 
 @csrf_exempt
 @firebase_login_required
@@ -299,11 +315,13 @@ def user_post_detail(request, post_id):
         if not snap.exists:
             return JsonResponse({"error": "Post no encontrado"}, status=404)
         old = snap.to_dict()
-        doc.update({
-            "content": data.get("content", old.get("content")),
-            "photoURL": data.get("photoURL", old.get("photoURL")),
-            "timestamp": datetime.utcnow(),
-        })
+        doc.update(
+            {
+                "content": data.get("content", old.get("content")),
+                "photoURL": data.get("photoURL", old.get("photoURL")),
+                "timestamp": datetime.utcnow(),
+            }
+        )
         return JsonResponse({"mensaje": "Post actualizado"})
 
     elif request.method == "DELETE":
@@ -311,6 +329,7 @@ def user_post_detail(request, post_id):
         return JsonResponse({"mensaje": "Post eliminado"})
 
     return JsonResponse({"error": "Método no permitido"}, status=405)
+
 
 @csrf_exempt
 @firebase_login_required
@@ -339,9 +358,12 @@ def comments(request, post_id):
             "timestamp": datetime.utcnow(),
         }
         _, doc_ref = col.add(new_comment)
-        return JsonResponse({"mensaje": "Comentario agregado", "id": doc_ref.id}, status=201)
+        return JsonResponse(
+            {"mensaje": "Comentario agregado", "id": doc_ref.id}, status=201
+        )
 
     return JsonResponse({"error": "Método no permitido"}, status=405)
+
 
 @csrf_exempt
 @firebase_login_required
@@ -350,23 +372,32 @@ def comment_detail(request, post_id, comment_id):
     PUT    /api/posts/<post_id>/comments/<comment_id>/ → actualiza comentario
     DELETE /api/posts/<post_id>/comments/<comment_id>/ → elimina comentario
     """
-    ref = db.collection("posts").document(post_id).collection("comments").document(comment_id)
+    ref = (
+        db.collection("posts")
+        .document(post_id)
+        .collection("comments")
+        .document(comment_id)
+    )
 
     if request.method == "PUT":
         data = json.loads(request.body)
-        ref.update({
-            "message": data.get("message"),
-            "timestamp": datetime.utcnow(),
-        })
+        ref.update(
+            {
+                "message": data.get("message"),
+                "timestamp": datetime.utcnow(),
+            }
+        )
         return JsonResponse({"mensaje": "Comentario actualizado"})
     elif request.method == "DELETE":
         ref.delete()
         return JsonResponse({"mensaje": "Comentario eliminado"})
     return JsonResponse({"error": "Método no permitido"}, status=405)
 
+
 # --------------------------------------------------------------------------------
 # Friends CRUD
 # --------------------------------------------------------------------------------
+
 
 @csrf_exempt
 @firebase_login_required
@@ -377,18 +408,20 @@ def friends(request):
     """
     uid = request.user_firebase["uid"]
     profile_ref = db.collection("profiles").document(uid)
-    col = profile_ref.collection("friends")
+    friends_col = profile_ref.collection("friends")
 
     if request.method == "GET":
         items = []
-        for snap in col.stream():
+        for snap in friends_col.stream():
             d = snap.to_dict()
-            items.append({
-                "uid": snap.id,
-                "username": d.get("username", ""),
-                "avatar": d.get("avatar", ""),
-                "addedAt": d.get("addedAt"),
-            })
+            items.append(
+                {
+                    "uid": snap.id,
+                    "username": d.get("username", ""),
+                    "avatar": d.get("avatar", ""),
+                    "addedAt": d.get("addedAt"),
+                }
+            )
         return JsonResponse({"friends": items})
 
     elif request.method == "POST":
@@ -397,20 +430,43 @@ def friends(request):
         if not target_uid or target_uid == uid:
             return JsonResponse({"error": "UID inválido"}, status=400)
 
-        other_snap = db.collection("profiles").document(target_uid).get()
+        # Verifica que exista el perfil de destino
+        other_ref = db.collection("profiles").document(target_uid)
+        other_snap = other_ref.get()
         if not other_snap.exists:
             return JsonResponse({"error": "Perfil no encontrado"}, status=404)
 
+        # Datos para registrar la amistad
         other = other_snap.to_dict()
-        record = {
+        record_for_me = {
             "username": other.get("username", ""),
             "avatar": other.get("photoURL", ""),
             "addedAt": firestore.SERVER_TIMESTAMP,
         }
-        col.document(target_uid).set(record)
-        return JsonResponse({"mensaje": "Amigo agregado", "uid": target_uid}, status=201)
+        # 1) Agrega B a la lista de A
+        friends_col.document(target_uid).set(record_for_me)
+
+        # 2) Ahora agrega A a la lista de B
+        me_snap = profile_ref.get()
+        me_data = me_snap.to_dict() or {}
+        record_for_other = {
+            "username": me_data.get("username", ""),
+            "avatar": me_data.get("photoURL", ""),
+            "addedAt": firestore.SERVER_TIMESTAMP,
+        }
+        other_ref.collection("friends").document(uid).set(record_for_other)
+
+        return JsonResponse(
+            {
+                "mensaje": "Amigo agregado bidireccionalmente",
+                "you": uid,
+                "friend": target_uid,
+            },
+            status=201,
+        )
 
     return JsonResponse({"error": "Método no permitido"}, status=405)
+
 
 @csrf_exempt
 @firebase_login_required
@@ -422,7 +478,12 @@ def friend_detail(request, friend_uid):
         return JsonResponse({"error": "Método no permitido"}, status=405)
 
     uid = request.user_firebase["uid"]
-    ref = db.collection("profiles").document(uid).collection("friends").document(friend_uid)
+    ref = (
+        db.collection("profiles")
+        .document(uid)
+        .collection("friends")
+        .document(friend_uid)
+    )
 
     if not ref.get().exists:
         return JsonResponse({"error": "Amigo no encontrado"}, status=404)
@@ -430,9 +491,11 @@ def friend_detail(request, friend_uid):
     ref.delete()
     return JsonResponse({"mensaje": "Amigo eliminado"})
 
+
 # --------------------------------------------------------------------------------
 # Followers/Friends Relations CRUD
 # --------------------------------------------------------------------------------
+
 
 @csrf_exempt
 @firebase_login_required
@@ -472,20 +535,27 @@ def relations(request, other_uid=None):
             "addedAt": firestore.SERVER_TIMESTAMP,
         }
         col.document(target_uid).set(record)
-        return JsonResponse({"mensaje": f"{subcol[:-1].capitalize()} agregado", "uid": target_uid}, status=201)
+        return JsonResponse(
+            {"mensaje": f"{subcol[:-1].capitalize()} agregado", "uid": target_uid},
+            status=201,
+        )
 
     elif request.method == "DELETE" and other_uid:
         ref = col.document(other_uid)
         if not ref.get().exists:
-            return JsonResponse({"error": f"{subcol[:-1].capitalize()} no encontrado"}, status=404)
+            return JsonResponse(
+                {"error": f"{subcol[:-1].capitalize()} no encontrado"}, status=404
+            )
         ref.delete()
         return JsonResponse({"mensaje": f"{subcol[:-1].capitalize()} eliminado"})
 
     return JsonResponse({"error": "Método no permitido"}, status=405)
 
+
 # --------------------------------------------------------------------------------
 # Chat History
 # --------------------------------------------------------------------------------
+
 
 def chat_history(request, room):
     """
