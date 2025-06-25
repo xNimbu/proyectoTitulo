@@ -156,20 +156,17 @@ def profile(request):
 
 @csrf_exempt
 def profile_list(request):
-    """
-    GET /api/profile_list/ → lista perfiles públicos
-    """
-    if request.method != "GET":
-        return JsonResponse({"error": "Método no permitido"}, status=405)
-
+    q = request.GET.get('q','').lower()
     perfiles = []
-    for doc_snap in db.collection("profiles").stream():
-        data = doc_snap.to_dict()
+    for doc in db.collection("profiles").stream():
+        data = doc.to_dict()
+        username = data.get("username","")
+        if q and q not in username.lower():
+            continue
         perfiles.append({
-            "uid": doc_snap.id,
-            "username": data.get("username", ""),
-            "avatar": data.get("photoURL", ""),
-            "unreadCount": data.get("unreadCount", 0),
+            "uid": doc.id,
+            "username": username,
+            "avatar": data.get("photoURL","")
         })
     return JsonResponse(perfiles, safe=False)
 
