@@ -375,8 +375,12 @@ def friends(request):
         items = []
         for snap in col.stream():
             d = snap.to_dict()
-            d["uid"] = snap.id
-            items.append(d)
+            items.append({
+                "uid": snap.id,
+                "username": d.get("username", ""),
+                "avatar": d.get("avatar", ""),
+                "addedAt": d.get("addedAt"),
+            })
         return JsonResponse({"friends": items})
 
     elif request.method == "POST":
