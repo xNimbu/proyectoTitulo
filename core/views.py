@@ -589,3 +589,51 @@ def chat_history(request, room):
         for m in mensajes
     ]
     return JsonResponse(data, safe=False)
+
+@csrf_exempt
+@firebase_login_required
+def relations(request, other_uid=None):
+    """
+    GET    /api/profile/relations/          → lista amigos o seguidores según role
+    POST   /api/profile/relations/          → agrega
+    DELETE /api/profile/relations/<other_uid>/    → elimina
+    """
+    uid = request.user_firebase["uid"]
+    profile_ref = db.collection("profiles").document(uid)
+    me_data = profile_ref.get().to_dict() or {}
+    role = me_data.get("role", "user")
+    subcol = "friends" if role in ("user", "admin") else "followers"
+    col = profile_ref.collection(subcol)
+
+    if request.method == "GET":
+        items = []
+        for snap in col.stream():
+            d = snap.to_dict()
+            items.append({**d, "uid": snap.id})
+        return JsonResponse({subcol: items})
+
+    elif request.method == "POST":
+        data = json.loads(request.body)
+        target_uid = data.get("uid")
+        if not target_uid or target_uid == uid:
+            return JsonResponse({"error": "UID inválido"}, status=400)
+        other_snap = db.collection("profiles").document(target_uid).get()
+        if not other_snap.exists:
+            return JsonResponse({"error": "Perfil no encontrado"}, status=404)
+        other = other_snap.to_dict()
+        record = {
+            "username": other.get("username", ""),
+            "avatar":   other.get("photoURL", ""),
+            "addedAt":  firestore.SERVER_TIMESTAMP,
+        }
+        col.document(target_uid).set(record)
+        return JsonResponse({"mensaje": f"{subcol[:-1].capitalize()} agregado", "uid": target_uid}, status=201)
+
+    elif request.method == "DELETE" and other_uid:
+        ref = col.document(other_uid)
+        if not ref.get().exists:
+            return JsonResponse({"error": f"{subcol[:-1].capitalize()} no encontrado"}, status=404)
+        ref.delete()
+        return JsonResponse({"mensaje": f"{subcol[:-1].capitalize()} eliminado"})
+
+    return JsonResponse({"error": "Método no permitido"}, status=405)
