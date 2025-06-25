@@ -445,6 +445,7 @@ def friends(request):
         }
         # 1) Agrega B a la lista de A
         friends_col.document(target_uid).set(record_for_me)
+        other_ref.collection("friends").document(uid).set(record_for_other)
 
         # 2) Ahora agrega A a la lista de B
         me_snap = profile_ref.get()
