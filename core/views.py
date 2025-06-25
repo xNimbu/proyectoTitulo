@@ -12,7 +12,7 @@ from google.cloud import firestore
 
 from .firebase_config import db
 from .auth import firebase_login_required
-from core import auth
+from core import auth as core_auth
 from core.models import ChatMessage
 
 # --------------------------------------------------------------------------------
@@ -66,7 +66,9 @@ def crear_usuario(request):
         role = data.get("role", "user")
 
         # Crear usuario en Auth
-        user = auth.create_user(email=email, password=password, display_name=nombre)
+        user = core_auth.create_user(
+            email=email, password=password, display_name=nombre
+        )
 
         # Generar código numérico único
         timestamp = int(datetime.utcnow().timestamp())
@@ -101,8 +103,8 @@ def crear_usuario(request):
 @firebase_login_required
 def profile(request):
     """
-    GET  /api/profile/ → perfil + pets + posts + role/code
-    POST /api/profile/ → crea/actualiza perfil
+    GET  /api/profile/       → perfil propio + pets + posts + friends
+    POST /api/profile/       → crea/actualiza perfil propio
     """
     uid = request.user_firebase["uid"]
     email = request.user_firebase["email"]
@@ -114,7 +116,6 @@ def profile(request):
             return JsonResponse({"error": "Perfil no encontrado"}, status=404)
         data = snap.to_dict()
 
-        # Campos básicos
         profile_data = {
             "fullName": data.get("fullName"),
             "username": data.get("username"),
@@ -142,9 +143,13 @@ def profile(request):
         ):
             post = post_snap.to_dict()
             post["id"] = post_snap.id
+            post["timestamp"] = (
+                post.get("timestamp").isoformat() if post.get("timestamp") else None
+            )
             posts.append(post)
         profile_data["posts"] = posts
 
+        # Amigos
         friends = []
         for friend_snap in doc_ref.collection("friends").stream():
             f = friend_snap.to_dict()
@@ -153,7 +158,9 @@ def profile(request):
                     "uid": friend_snap.id,
                     "username": f.get("username", ""),
                     "avatar": f.get("avatar", ""),
-                    "addedAt": f.get("addedAt"),
+                    "addedAt": (
+                        f.get("addedAt").isoformat() if f.get("addedAt") else None
+                    ),
                 }
             )
         profile_data["friends"] = friends
@@ -162,21 +169,86 @@ def profile(request):
 
     elif request.method in ("POST", "PUT"):
         body = json.loads(request.body)
-        perfil = {
+        update = {
             "fullName": body.get("fullName"),
             "username": body.get("username"),
             "phone": body.get("phone"),
             "role": body.get("role"),
             "photoURL": body.get("photoURL"),
         }
-        doc_ref.set(perfil, merge=True)
+        doc_ref.set(update, merge=True)
         return JsonResponse({"mensaje": "Perfil guardado"})
 
     return JsonResponse({"error": "Método no permitido"}, status=405)
 
 
 @csrf_exempt
+@firebase_login_required
+def profile_detail(request, uid):
+    """
+    GET /api/profile/<uid>/ → perfil público de cualquier usuario
+    """
+    if request.method != "GET":
+        return JsonResponse({"error": "Método no permitido"}, status=405)
+
+    doc_ref = db.collection("profiles").document(uid)
+    snap = doc_ref.get()
+    if not snap.exists:
+        return JsonResponse({"error": "Perfil no encontrado"}, status=404)
+    data = snap.to_dict()
+
+    profile_data = {
+        "fullName": data.get("fullName"),
+        "username": data.get("username"),
+        "email": data.get("email"),
+        "phone": data.get("phone"),
+        "photoURL": data.get("photoURL"),
+        "role": data.get("role", "user"),
+        "code": data.get("code"),
+    }
+
+    # Mascotas
+    profile_data["pets"] = [
+        dict(**pet_snap.to_dict(), id=pet_snap.id)
+        for pet_snap in doc_ref.collection("pets").stream()
+    ]
+
+    # Publicaciones
+    posts = []
+    for post_snap in (
+        doc_ref.collection("posts")
+        .order_by("timestamp", direction=firestore.Query.DESCENDING)
+        .stream()
+    ):
+        p = post_snap.to_dict()
+        p["id"] = post_snap.id
+        p["timestamp"] = p.get("timestamp").isoformat() if p.get("timestamp") else None
+        posts.append(p)
+    profile_data["posts"] = posts
+
+    # Amigos
+    profile_data["friends"] = [
+        {
+            "uid": f_snap.id,
+            "username": f.get("username", ""),
+            "avatar": f.get("avatar", ""),
+            "addedAt": f.get("addedAt").isoformat() if f.get("addedAt") else None,
+        }
+        for f_snap in doc_ref.collection("friends").stream()
+        for f in [f_snap.to_dict()]
+    ]
+
+    return JsonResponse(profile_data)
+
+
+@csrf_exempt
 def profile_list(request):
+    """
+    GET /api/profile_list/ → lista pública de perfiles, admite ?q= para filtrar por username
+    """
+    if request.method != "GET":
+        return JsonResponse({"error": "Método no permitido"}, status=405)
+
     q = request.GET.get("q", "").lower()
     perfiles = []
     for doc in db.collection("profiles").stream():
@@ -277,8 +349,8 @@ def user_posts(request):
 
     elif request.method == "POST":
         content = request.POST.get("content", "")
-        photoURL = ""
         image_file = request.FILES.get("image")
+        photoURL = ""
         if image_file:
             api_key = os.getenv("IMGBB_API_KEY")
             resp = requests.post(
@@ -388,9 +460,11 @@ def comment_detail(request, post_id, comment_id):
             }
         )
         return JsonResponse({"mensaje": "Comentario actualizado"})
+
     elif request.method == "DELETE":
         ref.delete()
         return JsonResponse({"mensaje": "Comentario eliminado"})
+
     return JsonResponse({"error": "Método no permitido"}, status=405)
 
 
@@ -403,16 +477,16 @@ def comment_detail(request, post_id, comment_id):
 @firebase_login_required
 def friends(request):
     """
-    GET  /api/profile/friends/               → Listar amigos
-    POST /api/profile/friends/               → Agregar un amigo
+    GET  /api/profile/friends/ → listar amigos del usuario
+    POST /api/profile/friends/ → agregar amigo bidireccional
     """
     uid = request.user_firebase["uid"]
     profile_ref = db.collection("profiles").document(uid)
-    friends_col = profile_ref.collection("friends")
+    col_me = profile_ref.collection("friends")
 
     if request.method == "GET":
         items = []
-        for snap in friends_col.stream():
+        for snap in col_me.stream():
             d = snap.to_dict()
             items.append(
                 {
@@ -430,32 +504,30 @@ def friends(request):
         if not target_uid or target_uid == uid:
             return JsonResponse({"error": "UID inválido"}, status=400)
 
-        # Verifica que exista el perfil de destino
+        # Verifica perfil destino
         other_ref = db.collection("profiles").document(target_uid)
         other_snap = other_ref.get()
         if not other_snap.exists:
             return JsonResponse({"error": "Perfil no encontrado"}, status=404)
 
-        # Datos para registrar la amistad
-        other = other_snap.to_dict()
-        record_for_me = {
-            "username": other.get("username", ""),
-            "avatar": other.get("photoURL", ""),
+        # Registro A→B
+        other_data = other_snap.to_dict()
+        record_me = {
+            "username": other_data.get("username", ""),
+            "avatar": other_data.get("photoURL", ""),
             "addedAt": firestore.SERVER_TIMESTAMP,
         }
-        # 1) Agrega B a la lista de A
-        friends_col.document(target_uid).set(record_for_me)
-        other_ref.collection("friends").document(uid).set(record_for_other)
+        col_me.document(target_uid).set(record_me)
 
-        # 2) Ahora agrega A a la lista de B
+        # Registro B→A
         me_snap = profile_ref.get()
         me_data = me_snap.to_dict() or {}
-        record_for_other = {
+        record_other = {
             "username": me_data.get("username", ""),
             "avatar": me_data.get("photoURL", ""),
             "addedAt": firestore.SERVER_TIMESTAMP,
         }
-        other_ref.collection("friends").document(uid).set(record_for_other)
+        other_ref.collection("friends").document(uid).set(record_other)
 
         return JsonResponse(
             {
@@ -473,82 +545,29 @@ def friends(request):
 @firebase_login_required
 def friend_detail(request, friend_uid):
     """
-    DELETE /api/profile/friends/<friend_uid>/ → Eliminar amigo
-    """
-    if request.method != "DELETE":
-        return JsonResponse({"error": "Método no permitido"}, status=405)
-
-    uid = request.user_firebase["uid"]
-    ref = (
-        db.collection("profiles")
-        .document(uid)
-        .collection("friends")
-        .document(friend_uid)
-    )
-
-    if not ref.get().exists:
-        return JsonResponse({"error": "Amigo no encontrado"}, status=404)
-
-    ref.delete()
-    return JsonResponse({"mensaje": "Amigo eliminado"})
-
-
-# --------------------------------------------------------------------------------
-# Followers/Friends Relations CRUD
-# --------------------------------------------------------------------------------
-
-
-@csrf_exempt
-@firebase_login_required
-def relations(request, other_uid=None):
-    """
-    GET    /api/profile/relations/          → lista amigos o seguidores según role
-    POST   /api/profile/relations/          → agrega
-    DELETE /api/profile/relations/<uid>/    → elimina
+    GET    /api/profile/friends/<friend_uid>/ → ver perfil de ese amigo
+    DELETE /api/profile/friends/<friend_uid>/ → eliminar amigo unidireccional
     """
     uid = request.user_firebase["uid"]
-    profile_ref = db.collection("profiles").document(uid)
-    me_data = profile_ref.get().to_dict() or {}
-    role = me_data.get("role", "user")
-    subcol = "friends" if role in ("user", "admin") else "followers"
-    col = profile_ref.collection(subcol)
+    friend_ref = db.collection("profiles").document(friend_uid)
+    friend_snap = friend_ref.get()
+    if not friend_snap.exists:
+        return JsonResponse({"error": "Perfil no encontrado"}, status=404)
 
     if request.method == "GET":
-        items = []
-        for snap in col.stream():
-            d = snap.to_dict()
-            d["uid"] = snap.id
-            items.append(d)
-        return JsonResponse({subcol: items})
+        return profile_detail(request, friend_uid)
 
-    elif request.method == "POST":
-        data = json.loads(request.body)
-        target_uid = data.get("uid")
-        if not target_uid or target_uid == uid:
-            return JsonResponse({"error": "UID inválido"}, status=400)
-        other_snap = db.collection("profiles").document(target_uid).get()
-        if not other_snap.exists:
-            return JsonResponse({"error": "Perfil no encontrado"}, status=404)
-        other = other_snap.to_dict()
-        record = {
-            "username": other.get("username", ""),
-            "avatar": other.get("photoURL", ""),
-            "addedAt": firestore.SERVER_TIMESTAMP,
-        }
-        col.document(target_uid).set(record)
-        return JsonResponse(
-            {"mensaje": f"{subcol[:-1].capitalize()} agregado", "uid": target_uid},
-            status=201,
+    elif request.method == "DELETE":
+        rel_ref = (
+            db.collection("profiles")
+            .document(uid)
+            .collection("friends")
+            .document(friend_uid)
         )
-
-    elif request.method == "DELETE" and other_uid:
-        ref = col.document(other_uid)
-        if not ref.get().exists:
-            return JsonResponse(
-                {"error": f"{subcol[:-1].capitalize()} no encontrado"}, status=404
-            )
-        ref.delete()
-        return JsonResponse({"mensaje": f"{subcol[:-1].capitalize()} eliminado"})
+        if not rel_ref.get().exists:
+            return JsonResponse({"error": "Amigo no encontrado"}, status=404)
+        rel_ref.delete()
+        return JsonResponse({"mensaje": "Amigo eliminado"})
 
     return JsonResponse({"error": "Método no permitido"}, status=405)
 
