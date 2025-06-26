@@ -192,34 +192,25 @@ def profile(request):
 
         # 2) multipart/form-data (para subir foto + campos)
         elif request.content_type.startswith("multipart/"):
-            for campo in ("fullName", "username", "email", "phone"):
-                val = request.POST.get(campo)
-                if val:
-                    update[campo] = val
-
-            # subida de imagen
-            image_file = request.FILES.get("photo")
-            if image_file:
-                api_key = os.getenv("IMGBB_API_KEY")
-                resp = requests.post(
-                    "https://api.imgbb.com/1/upload",
-                    params={"key": api_key},
-                    files={"image": image_file.read()},
-                )
-                if resp.ok:
+            try:
+                image_file = request.FILES.get("photo")
+                if image_file:
+                    api_key = os.getenv("IMGBB_API_KEY")
+                    resp = requests.post(
+                        "https://api.imgbb.com/1/upload",
+                        params={"key": api_key},
+                        files={"image": image_file.read()},
+                    )
+                    resp.raise_for_status()
                     update["photoURL"] = resp.json()["data"]["url"]
 
-        else:
-            return JsonResponse({"error": "Content-Type no soportado"}, status=415)
+                # finalmente guardamos
+                doc_ref.set(update, merge=True)
+                # y devolvemos el perfil completo o al menos:
+                return JsonResponse({"mensaje": "Perfil guardado"})
 
-        if not update:
-            return JsonResponse({"error": "Sin datos para actualizar"}, status=400)
-
-        # 3) Merge para no machacar otros campos
-        try:
-            doc_ref.set(update, merge=True)
-        except Exception as e:
-            return JsonResponse({"error": str(e)}, status=500)
+            except Exception as e:
+                return JsonResponse({"error": str(e)}, status=500)
 
         return JsonResponse({"mensaje": "Perfil guardado"})
 
