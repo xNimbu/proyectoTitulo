@@ -170,14 +170,9 @@ def profile(request):
     if request.method in ("POST", "PUT"):
         update = {}
 
-        # 1) JSON puro
-        if request.content_type.startswith("application/json"):
-            try:
-                body = json.loads(request.body)
-            except json.JSONDecodeError:
-                return JsonResponse({"error": "JSON inválido"}, status=400)
-
-            # Sólo volcar al update los campos que vengan
+        # 1) Intento parsear un JSON si lo hubiera
+        try:
+            body = json.loads(request.body or "{}")
             for campo in (
                 "fullName",
                 "username",
@@ -187,31 +182,37 @@ def profile(request):
                 "role",
                 "code",
             ):
-                if campo in body and body[campo] is not None:
-                    update[campo] = body[campo]
+                val = body.get(campo)
+                if val is not None:
+                    update[campo] = val
+        except json.JSONDecodeError:
+            # no era JSON, lo ignoramos
+            pass
 
-        # 2) multipart/form-data (para subir foto + campos)
-        elif request.content_type.startswith("multipart/"):
-            try:
-                image_file = request.FILES.get("photo")
-                if image_file:
-                    api_key = os.getenv("IMGBB_API_KEY")
-                    resp = requests.post(
-                        "https://api.imgbb.com/1/upload",
-                        params={"key": api_key},
-                        files={"image": image_file.read()},
-                    )
-                    resp.raise_for_status()
-                    update["photoURL"] = resp.json()["data"]["url"]
+        # 2) También leo form-data por si viene multipart
+        for campo in ("fullName", "username", "email", "phone"):
+            val = request.POST.get(campo)
+            if val:
+                update[campo] = val
 
-                # finalmente guardamos
-                doc_ref.set(update, merge=True)
-                # y devolvemos el perfil completo o al menos:
-                return JsonResponse({"mensaje": "Perfil guardado"})
+        # 3) Si hay archivo, lo subo igual que antes
+        image_file = request.FILES.get("photo")
+        if image_file:
+            api_key = os.getenv("IMGBB_API_KEY")
+            resp = requests.post(
+                "https://api.imgbb.com/1/upload",
+                params={"key": api_key},
+                files={"image": image_file.read()},
+            )
+            resp.raise_for_status()
+            update["photoURL"] = resp.json()["data"]["url"]
 
-            except Exception as e:
-                return JsonResponse({"error": str(e)}, status=500)
+        # 4) Validación final
+        if not update:
+            return JsonResponse({"error": "Sin datos para actualizar"}, status=400)
 
+        # 5) Merge y respuesta
+        doc_ref.set(update, merge=True)
         return JsonResponse({"mensaje": "Perfil guardado"})
 
     return JsonResponse({"error": "Método no permitido"}, status=405)
