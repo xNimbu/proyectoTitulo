@@ -168,17 +168,50 @@ def profile(request):
         return JsonResponse(profile_data)
 
     elif request.method in ("POST", "PUT"):
-        body = json.loads(request.body)
-        update = {
-            "fullName": body.get("fullName"),
-            "username": body.get("username"),
-            "phone": body.get("phone"),
-            "role": body.get("role"),
-            "photoURL": body.get("photoURL"),
-        }
-        doc_ref.set(update, merge=True)
-        return JsonResponse({"mensaje": "Perfil guardado"})
+            # Inicializamos variables
+            fullName = username = phone = role = None
+            photoURL = None
 
+            # 1) Si es JSON puro
+            if request.content_type.startswith("application/json"):
+                body = json.loads(request.body)
+                fullName = body.get("fullName")
+                username = body.get("username")
+                phone = body.get("phone")
+                role = body.get("role")
+                photoURL = body.get("photoURL")
+
+            # 2) Si es multipart/form-data (form + archivo)
+            elif request.content_type.startswith("multipart/"):
+                fullName = request.POST.get("fullName")
+                username = request.POST.get("username")
+                phone = request.POST.get("phone")
+                role = request.POST.get("role")
+
+                # Manejo de subida de imagen
+                image_file = request.FILES.get("photo")
+                if image_file:
+                    api_key = os.getenv("IMGBB_API_KEY")
+                    resp = requests.post(
+                        "https://api.imgbb.com/1/upload",
+                        params={"key": api_key},
+                        files={"image": image_file.read()},
+                    )
+                    if resp.status_code == 200:
+                        photoURL = resp.json()["data"]["url"]
+
+            # 3) Preparamos el dict de actualización (sólo llaves no nulas)
+            update = {}
+            if fullName is not None: update["fullName"] = fullName
+            if username is not None: update["username"] = username
+            if phone is not None:    update["phone"] = phone
+            if role is not None:     update["role"] = role
+            if photoURL is not None: update["photoURL"] = photoURL
+    
+                # 4) Hacemos merge para no sobreescribir otros campos
+            doc_ref.set(update, merge=True)
+            return JsonResponse({"mensaje": "Perfil guardado"})
+        
     return JsonResponse({"error": "Método no permitido"}, status=405)
 
 
