@@ -168,49 +168,52 @@ def profile(request):
 
         return JsonResponse(profile_data)
 
-    if request.method in ("POST", "PUT"):
-        update = {}
+    if request.method == "POST":
+        # 1) Leemos los campos de form-data
+        fullName = request.POST.get("fullName")
+        username = request.POST.get("username")
+        email = request.POST.get("email")
+        phone = request.POST.get("phone")
 
-        # 1) Primero intentamos JSON
-        try:
-            body = json.loads(request.body or "{}")
-            for campo in ("fullName", "username", "email", "phone", "photoURL"):
-                if campo in body:
-                    update[campo] = body[campo]
-        except json.JSONDecodeError:
-            pass
-
-        # 2) Si es multipart en PUT o POST, lo parseamos a mano
-        content_type = request.META.get("CONTENT_TYPE", "")
-        if content_type.startswith("multipart/"):
-            parser = MultiPartParser(
-                request.META, request, request.upload_handlers, request.encoding
+        # 2) Subimos la foto si viene
+        photoURL = None
+        image_file = request.FILES.get("image")
+        if image_file:
+            api_key = os.getenv("IMGBB_API_KEY")
+            resp = requests.post(
+                "https://api.imgbb.com/1/upload",
+                params={"key": api_key},
+                files={"image": image_file.read()},
             )
-            post, files = parser.parse()
-            # Leer campos textuales
-            for campo in ("fullName", "username", "email", "phone"):
-                val = post.get(campo)
-                if val:
-                    update[campo] = val
-            # Leer archivo
-            image_file = files.get("photo")
-            if image_file:
-                api_key = os.getenv("IMGBB_API_KEY")
-                resp = requests.post(
-                    "https://api.imgbb.com/1/upload",
-                    params={"key": api_key},
-                    files={"image": image_file.read()},
-                )
-                resp.raise_for_status()
-                update["photoURL"] = resp.json()["data"]["url"]
+            if resp.ok:
+                photoURL = resp.json()["data"]["url"]
 
-        # 3) Validación
+        # 3) Armamos el dict de actualización
+        update = {}
+        if fullName:
+            update["fullName"] = fullName
+        if username:
+            update["username"] = username
+        if email:
+            update["email"] = email
+        if phone:
+            update["phone"] = phone
+        if photoURL:
+            update["photoURL"] = photoURL
+
         if not update:
             return JsonResponse({"error": "Sin datos para actualizar"}, status=400)
 
-        # 4) Guardar con merge
+        # 4) Hacemos el merge en Firestore
         doc_ref.set(update, merge=True)
-        return JsonResponse({"mensaje": "Perfil guardado"})
+
+        # 5) Respondemos con la URL nueva y mensaje
+        return JsonResponse(
+            {
+                "mensaje": "Perfil guardado",
+                "photoURL": photoURL,  # opcional, para que el cliente la use
+            }
+        )
 
     return JsonResponse({"error": "Método no permitido"}, status=405)
 
