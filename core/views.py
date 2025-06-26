@@ -167,49 +167,62 @@ def profile(request):
 
         return JsonResponse(profile_data)
 
-    elif request.method in ("POST", "PUT"):
-            # Inicializamos variables
-            fullName = username = phone = role = None
-            photoURL = None
+    if request.method in ("POST", "PUT"):
+        update = {}
 
-            # 1) Si es JSON puro
-            if request.content_type.startswith("application/json"):
+        # 1) JSON puro
+        if request.content_type.startswith("application/json"):
+            try:
                 body = json.loads(request.body)
-                fullName = body.get("fullName")
-                username = body.get("username")
-                phone = body.get("phone")
-                photoURL = body.get("photoURL")
+            except json.JSONDecodeError:
+                return JsonResponse({"error": "JSON inválido"}, status=400)
 
-            # 2) Si es multipart/form-data (form + archivo)
-            elif request.content_type.startswith("multipart/"):
-                fullName = request.POST.get("fullName")
-                username = request.POST.get("username")
-                phone = request.POST.get("phone")
+            # Sólo volcar al update los campos que vengan
+            for campo in (
+                "fullName",
+                "username",
+                "email",
+                "phone",
+                "photoURL",
+                "role",
+                "code",
+            ):
+                if campo in body and body[campo] is not None:
+                    update[campo] = body[campo]
 
-                # Manejo de subida de imagen (opcional)
-                image_file = request.FILES.get("photo")
-                if image_file:
-                    api_key = os.getenv("IMGBB_API_KEY")
-                    resp = requests.post(
-                        "https://api.imgbb.com/1/upload",
-                        params={"key": api_key},
-                        files={"image": image_file.read()},
-                    )
-                    if resp.status_code == 200:
-                        photoURL = resp.json()["data"]["url"]
-                # Si no se envía imagen, photoURL queda como None o el valor anterior
+        # 2) multipart/form-data (para subir foto + campos)
+        elif request.content_type.startswith("multipart/"):
+            for campo in ("fullName", "username", "email", "phone"):
+                val = request.POST.get(campo)
+                if val:
+                    update[campo] = val
 
-            # 3) Preparamos el dict de actualización (sólo llaves no nulas)
-            update = {}
-            if fullName is not None: update["fullName"] = fullName
-            if username is not None: update["username"] = username
-            if phone is not None:    update["phone"] = phone
-            if photoURL is not None: update["photoURL"] = photoURL
-    
-                # 4) Hacemos merge para no sobreescribir otros campos
+            # subida de imagen
+            image_file = request.FILES.get("photo")
+            if image_file:
+                api_key = os.getenv("IMGBB_API_KEY")
+                resp = requests.post(
+                    "https://api.imgbb.com/1/upload",
+                    params={"key": api_key},
+                    files={"image": image_file.read()},
+                )
+                if resp.ok:
+                    update["photoURL"] = resp.json()["data"]["url"]
+
+        else:
+            return JsonResponse({"error": "Content-Type no soportado"}, status=415)
+
+        if not update:
+            return JsonResponse({"error": "Sin datos para actualizar"}, status=400)
+
+        # 3) Merge para no machacar otros campos
+        try:
             doc_ref.set(update, merge=True)
-            return JsonResponse({"mensaje": "Perfil guardado"})
-        
+        except Exception as e:
+            return JsonResponse({"error": str(e)}, status=500)
+
+        return JsonResponse({"mensaje": "Perfil guardado"})
+
     return JsonResponse({"error": "Método no permitido"}, status=405)
 
 
@@ -621,6 +634,7 @@ def chat_history(request, room):
     ]
     return JsonResponse(data, safe=False)
 
+
 @csrf_exempt
 @firebase_login_required
 def relations(request, other_uid=None):
@@ -654,16 +668,21 @@ def relations(request, other_uid=None):
         other = other_snap.to_dict()
         record = {
             "username": other.get("username", ""),
-            "avatar":   other.get("photoURL", ""),
-            "addedAt":  firestore.SERVER_TIMESTAMP,
+            "avatar": other.get("photoURL", ""),
+            "addedAt": firestore.SERVER_TIMESTAMP,
         }
         col.document(target_uid).set(record)
-        return JsonResponse({"mensaje": f"{subcol[:-1].capitalize()} agregado", "uid": target_uid}, status=201)
+        return JsonResponse(
+            {"mensaje": f"{subcol[:-1].capitalize()} agregado", "uid": target_uid},
+            status=201,
+        )
 
     elif request.method == "DELETE" and other_uid:
         ref = col.document(other_uid)
         if not ref.get().exists:
-            return JsonResponse({"error": f"{subcol[:-1].capitalize()} no encontrado"}, status=404)
+            return JsonResponse(
+                {"error": f"{subcol[:-1].capitalize()} no encontrado"}, status=404
+            )
         ref.delete()
         return JsonResponse({"mensaje": f"{subcol[:-1].capitalize()} eliminado"})
 
