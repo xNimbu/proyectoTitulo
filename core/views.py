@@ -4,8 +4,9 @@ import os
 import random
 import requests
 
-from django.http import JsonResponse, MultiPartParser
+from django.http import JsonResponse
 from django.views.decorators.csrf import csrf_exempt
+from django.http.multipartparser import MultiPartParser
 
 from firebase_admin import auth as firebase_auth
 from google.cloud import firestore
