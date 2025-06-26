@@ -178,7 +178,6 @@ def profile(request):
                 fullName = body.get("fullName")
                 username = body.get("username")
                 phone = body.get("phone")
-                role = body.get("role")
                 photoURL = body.get("photoURL")
 
             # 2) Si es multipart/form-data (form + archivo)
@@ -186,9 +185,8 @@ def profile(request):
                 fullName = request.POST.get("fullName")
                 username = request.POST.get("username")
                 phone = request.POST.get("phone")
-                role = request.POST.get("role")
 
-                # Manejo de subida de imagen
+                # Manejo de subida de imagen (opcional)
                 image_file = request.FILES.get("photo")
                 if image_file:
                     api_key = os.getenv("IMGBB_API_KEY")
@@ -199,13 +197,13 @@ def profile(request):
                     )
                     if resp.status_code == 200:
                         photoURL = resp.json()["data"]["url"]
+                # Si no se envía imagen, photoURL queda como None o el valor anterior
 
             # 3) Preparamos el dict de actualización (sólo llaves no nulas)
             update = {}
             if fullName is not None: update["fullName"] = fullName
             if username is not None: update["username"] = username
             if phone is not None:    update["phone"] = phone
-            if role is not None:     update["role"] = role
             if photoURL is not None: update["photoURL"] = photoURL
     
                 # 4) Hacemos merge para no sobreescribir otros campos
