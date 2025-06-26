@@ -4,7 +4,7 @@ import os
 import random
 import requests
 
-from django.http import JsonResponse
+from django.http import JsonResponse, MultiPartParser
 from django.views.decorators.csrf import csrf_exempt
 
 from firebase_admin import auth as firebase_auth
@@ -170,48 +170,44 @@ def profile(request):
     if request.method in ("POST", "PUT"):
         update = {}
 
-        # 1) Intento parsear un JSON si lo hubiera
+        # 1) Primero intentamos JSON
         try:
             body = json.loads(request.body or "{}")
-            for campo in (
-                "fullName",
-                "username",
-                "email",
-                "phone",
-                "photoURL",
-                "role",
-                "code",
-            ):
-                val = body.get(campo)
-                if val is not None:
-                    update[campo] = val
+            for campo in ("fullName", "username", "email", "phone", "photoURL"):
+                if campo in body:
+                    update[campo] = body[campo]
         except json.JSONDecodeError:
-            # no era JSON, lo ignoramos
             pass
 
-        # 2) También leo form-data por si viene multipart
-        for campo in ("fullName", "username", "email", "phone"):
-            val = request.POST.get(campo)
-            if val:
-                update[campo] = val
-
-        # 3) Si hay archivo, lo subo igual que antes
-        image_file = request.FILES.get("photo")
-        if image_file:
-            api_key = os.getenv("IMGBB_API_KEY")
-            resp = requests.post(
-                "https://api.imgbb.com/1/upload",
-                params={"key": api_key},
-                files={"image": image_file.read()},
+        # 2) Si es multipart en PUT o POST, lo parseamos a mano
+        content_type = request.META.get("CONTENT_TYPE", "")
+        if content_type.startswith("multipart/"):
+            parser = MultiPartParser(
+                request.META, request, request.upload_handlers, request.encoding
             )
-            resp.raise_for_status()
-            update["photoURL"] = resp.json()["data"]["url"]
+            post, files = parser.parse()
+            # Leer campos textuales
+            for campo in ("fullName", "username", "email", "phone"):
+                val = post.get(campo)
+                if val:
+                    update[campo] = val
+            # Leer archivo
+            image_file = files.get("photo")
+            if image_file:
+                api_key = os.getenv("IMGBB_API_KEY")
+                resp = requests.post(
+                    "https://api.imgbb.com/1/upload",
+                    params={"key": api_key},
+                    files={"image": image_file.read()},
+                )
+                resp.raise_for_status()
+                update["photoURL"] = resp.json()["data"]["url"]
 
-        # 4) Validación final
+        # 3) Validación
         if not update:
             return JsonResponse({"error": "Sin datos para actualizar"}, status=400)
 
-        # 5) Merge y respuesta
+        # 4) Guardar con merge
         doc_ref.set(update, merge=True)
         return JsonResponse({"mensaje": "Perfil guardado"})
 
