@@ -14,6 +14,7 @@ from google.cloud import firestore
 from .firebase_config import db
 from .auth import firebase_login_required
 from core import auth as core_auth
+from core.auth import create_user
 from core.models import ChatMessage
 
 # --------------------------------------------------------------------------------
@@ -50,46 +51,55 @@ def vista_protegida(request):
 # --------------------------------------------------------------------------------
 
 
-@csrf_exempt
 def crear_usuario(request):
     """
     POST /api/register/ → crea usuario en Firebase Auth + Firestore profile
-    Body: { email, password, nombre?, role? }
+    Body JSON: { email, password, nombre?, role? }
     """
     if request.method != "POST":
         return JsonResponse({"error": "Método no permitido"}, status=405)
 
+    # 1) Parsear JSON
     try:
         data = json.loads(request.body)
-        email = data["email"]
-        password = data["password"]
-        nombre = data.get("nombre", "")
-        role = data.get("role", "user")
+    except json.JSONDecodeError:
+        return JsonResponse({"error": "JSON inválido"}, status=400)
 
-        # Crear usuario en Auth
-        user = core_auth.create_user(
-            email=email, password=password, display_name=nombre
+    email = data.get("email")
+    password = data.get("password")
+    if not email or not password:
+        return JsonResponse({"error": "Faltan email o password"}, status=400)
+
+    nombre = data.get("nombre", "")
+    role = data.get("role", "user")
+
+    try:
+        # 2) Crear usuario en Auth
+        user_record = create_user(
+            email=email,
+            password=password,
+            display_name=nombre,
         )
 
-        # Generar código numérico único
+        # 3) Generar código numérico único
         timestamp = int(datetime.utcnow().timestamp())
         code = int(f"{timestamp}{random.randint(0,9)}")
 
-        # Guardar perfil en Firestore
-        db.collection("profiles").document(user.uid).set(
-            {
-                "fullName": nombre,
-                "email": email,
-                "role": role,
-                "code": code,
-                "createdAt": datetime.utcnow(),
-            }
-        )
+        # 4) Guardar perfil en Firestore
+        profile_data = {
+            "fullName": nombre,
+            "email": email,
+            "role": role,
+            "code": code,
+            "createdAt": datetime.utcnow(),  # o firestore.SERVER_TIMESTAMP()
+        }
+        db.collection("profiles").document(user_record.uid).set(profile_data)
 
+        # 5) Responder al cliente
         return JsonResponse(
             {
                 "mensaje": "Usuario creado",
-                "uid": user.uid,
+                "uid": user_record.uid,
                 "role": role,
                 "code": code,
             },
@@ -97,6 +107,7 @@ def crear_usuario(request):
         )
 
     except Exception as e:
+        # Aquí puedes mapear errores específicos de Firebase si quieres
         return JsonResponse({"error": str(e)}, status=400)
 
 
