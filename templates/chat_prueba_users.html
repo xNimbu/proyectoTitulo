@@ -1,129 +1,36 @@
 <!DOCTYPE html>
 <html lang="es">
-
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Chat de Prueba</title>
   <style>
-    body {
-      font-family: sans-serif;
-      margin: 0;
-      height: 100vh;
-      display: flex;
-      flex-direction: column;
-    }
-
-    #login {
-      flex: 1;
-      display: flex;
-      justify-content: center;
-      align-items: center;
-    }
-
-    #app {
-      flex: 1;
-      display: none;
-    }
-
-    .container {
-      display: flex;
-      height: 100%;
-    }
-
-    #profiles {
-      width: 25%;
-      border-right: 1px solid #ccc;
-      overflow-y: auto;
-    }
-
-    #profiles h3 {
-      margin: 0;
-      padding: 10px;
-      background: #f5f5f5;
-    }
-
-    #profiles ul {
-      list-style: none;
-      padding: 0;
-      margin: 0;
-    }
-
-    #profiles li {
-      padding: 8px;
-      cursor: pointer;
-      border-bottom: 1px solid #eee;
-      display: flex;
-      align-items: center;
-    }
-
-    #profiles li.active {
-      background: #e9f5ef;
-    }
-
-    #profiles img {
-      border-radius: 50%;
-      margin-right: 8px;
-      width: 30px;
-      height: 30px;
-    }
-
-    #chat {
-      flex: 1;
-      display: flex;
-      flex-direction: column;
-    }
-
-    #messages {
-      flex: 1;
-      overflow-y: auto;
-      padding: 10px;
-      background: #fafafa;
-    }
-
-    .msg {
-      margin: 4px 0;
-      padding: 6px 10px;
-      border-radius: 8px;
-      max-width: 60%;
-      word-wrap: break-word;
-    }
-
-    .me {
-      align-self: flex-end;
-      background: #DCF8C6;
-    }
-
-    .them {
-      align-self: flex-start;
-      background: #F1F0F0;
-    }
-
-    #input {
-      display: flex;
-      border-top: 1px solid #ccc;
-    }
-
-    #input input {
-      flex: 1;
-      padding: 8px;
-      border: none;
-      outline: none;
-    }
-
-    #input button {
-      padding: 8px 16px;
-      border: none;
-      background: #006353;
-      color: white;
-      cursor: pointer;
-    }
+    body { font-family: sans-serif; margin: 0; height: 100vh; display: flex; flex-direction: column; }
+    #login { flex: 1; display: flex; flex-direction: column; justify-content: center; align-items: center; padding: 20px; }
+    #login input { width: 80%; padding: 10px; margin-bottom: 10px; font-size: 1rem; }
+    #login button { padding: 10px 20px; font-size: 1rem; background: #006353; color: #fff; border: none; cursor: pointer; }
+    #app { flex: 1; display: none; }
+    .container { display: flex; height: 100%; }
+    #profiles { width: 25%; border-right: 1px solid #ccc; overflow-y: auto; }
+    #profiles h3 { margin: 0; padding: 10px; background: #f5f5f5; }
+    #profiles ul { list-style: none; padding: 0; margin: 0; }
+    #profiles li { padding: 8px; cursor: pointer; border-bottom: 1px solid #eee; display: flex; align-items: center; }
+    #profiles li.active { background: #e9f5ef; }
+    #profiles img { border-radius: 50%; margin-right: 8px; width: 30px; height: 30px; }
+    #chat { flex: 1; display: flex; flex-direction: column; }
+    #messages { flex: 1; overflow-y: auto; padding: 10px; background: #fafafa; }
+    .msg { margin: 4px 0; padding: 6px 10px; border-radius: 8px; max-width: 60%; word-wrap: break-word; }
+    .me { align-self: flex-end; background: #DCF8C6; }
+    .them { align-self: flex-start; background: #F1F0F0; }
+    #input { display: flex; border-top: 1px solid #ccc; }
+    #input input { flex: 1; padding: 8px; border: none; outline: none; }
+    #input button { padding: 8px 16px; border: none; background: #006353; color: white; cursor: pointer; }
   </style>
 </head>
-
 <body>
   <div id="login">
-    <button id="loginBtn">Iniciar sesión con Google</button>
+    <input id="tokenInput" type="text" placeholder="Pega tu Firebase ID Token" />
+    <button id="loginBtn">Iniciar sesión</button>
   </div>
 
   <div id="app">
@@ -142,54 +49,36 @@
     </div>
   </div>
 
-  <!-- Firebase SDKs -->
-  <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-app-compat.js"></script>
-  <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-auth-compat.js"></script>
-
   <script>
-    // Configuración de Firebase (reemplaza con tus credenciales)
-    const firebaseConfig = {
-      apiKey: "AIzaSyBd0_Ahe1MUl8kb9lXaQterrraQi1lbIvk",
-      authDomain: "petlink-d54eb.firebaseapp.com",
-      databaseURL: "https://petlink-d54eb-default-rtdb.firebaseio.com/",
-      projectId: "petlink-d54eb",
-      storageBucket: "petlink-d54eb.firebasestorage.app",
-      messagingSenderId: "560042626252",
-      appId: "1:560042626252:web:a2f69ef93b283064e08669",
-      measurementId: "G-PLMLME8T8T"
-    };
-    firebase.initializeApp(firebaseConfig);
-    const auth = firebase.auth();
-
     let idToken = null;
     let currentUid = null;
     let currentUsername = null;
     let socket = null;
 
-    // 1) Login con Google
+    // Iniciar sesión manual con token
     document.getElementById('loginBtn').onclick = () => {
-      const provider = new firebase.auth.GoogleAuthProvider();
-      auth.signInWithRedirect(provider);
+      const token = document.getElementById('tokenInput').value.trim();
+      if (!token) {
+        alert('Ingresa un token válido');
+        return;
+      }
+      idToken = token;
+      // Decodificar payload JWT para obtener UID y nombre
+      try {
+        const payload = JSON.parse(atob(idToken.split('.')[1]));
+        currentUid = payload.user_id || payload.sub;
+        currentUsername = payload.name || payload.email || currentUid;
+      } catch (e) {
+        console.error('Token inválido', e);
+        alert('Token inválido');
+        return;
+      }
+      document.getElementById('login').style.display = 'none';
+      document.getElementById('app').style.display = 'flex';
+      loadProfiles();
     };
 
-    // Después, en tu script de arranque de la página:
-    auth.getRedirectResult()
-      .then(async (result) => {
-        if (!result.user) return;         // aún no vino del redirect
-        const user = result.user;
-        idToken = await user.getIdToken();
-        currentUid = user.uid;
-        currentUsername = user.displayName || user.email;
-        document.getElementById('login').style.display = 'none';
-        document.getElementById('app').style.display = 'flex';
-        loadProfiles();
-      })
-      .catch(err => {
-        console.error(err);
-        alert('Error en autenticación por redirección: ' + err.message);
-      });
-
-    // 2) Carga lista de perfiles
+    // Cargar lista de perfiles
     function loadProfiles() {
       fetch('/api/profile_list/')
         .then(res => res.json())
@@ -197,11 +86,9 @@
           const ul = document.getElementById('list');
           ul.innerHTML = '';
           perfiles.forEach(p => {
-            // No mostrarse a sí mismo
             if (p.uid === currentUid) return;
             const li = document.createElement('li');
             li.dataset.uid = p.uid;
-            // Avatar
             if (p.avatar) {
               const img = document.createElement('img'); img.src = p.avatar;
               li.appendChild(img);
@@ -216,17 +103,13 @@
         .catch(console.error);
     }
 
-    // 3) Selección de perfil: conexión a sala única
+    // Seleccionar perfil y conectar WebSocket
     function selectProfile(li) {
-      // Marca activo
       document.querySelectorAll('#profiles li').forEach(x => x.classList.remove('active'));
       li.classList.add('active');
-
       const targetUid = li.dataset.uid;
-      // Genera nombre de sala consistente para ambos usuarios
       const roomParts = [currentUid, targetUid].sort();
       const roomName = roomParts.join('_');
-
       if (socket) socket.close();
       openSocket(roomName);
       clearMessages();
@@ -235,21 +118,16 @@
     function openSocket(roomName) {
       const protocol = location.protocol === 'https:' ? 'wss' : 'ws';
       socket = new WebSocket(`${protocol}://${location.host}/ws/chat/${roomName}/`);
-
       socket.onopen = () => {
-        // Autenticación WebSocket
         socket.send(JSON.stringify({ type: 'auth', token: idToken }));
       };
-
       socket.onmessage = ev => {
         const data = JSON.parse(ev.data);
         if (data.type === 'history' || data.type === 'chat.message') {
           appendMessage(data.user, data.message);
         }
       };
-
       socket.onclose = e => console.log('WebSocket cerrado', e);
-
       document.getElementById('sendBtn').onclick = sendMessage;
       document.getElementById('msgInput').onkeyup = e => { if (e.key === 'Enter') sendMessage(); };
     }
@@ -276,5 +154,4 @@
     }
   </script>
 </body>
-
 </html>
