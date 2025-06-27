@@ -22,6 +22,7 @@ urlpatterns = [
     path('admin/', admin.site.urls),
     path('api/', include('core.urls')),
     path('chat_prueba/', TemplateView.as_view(template_name='chat_prueba.html'), name='chat_prueba'),
+    path('chat_prueba_users/', TemplateView.as_view(template_name='chat_prueba_users.html'), name='chat_prueba_users'),
     path('token/', TemplateView.as_view(template_name='token.html'), name='token'),
     path('ver-posts/', TemplateView.as_view(template_name='ver-posts.html'), name='ver-posts'),
 ]
