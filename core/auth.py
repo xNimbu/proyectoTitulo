@@ -24,3 +24,18 @@ def firebase_login_required(view_func):
         return view_func(request, *args, **kwargs)
 
     return _wrapped_view
+
+def create_user(email, password, display_name=None):
+    try:
+        user = auth.create_user(
+            email=email,
+            password=password,
+            display_name=display_name if display_name else None
+        )
+        return {
+            'uid': user.uid,
+            'email': user.email,
+            'display_name': user.display_name
+        }
+    except Exception as e:
+        return {'error': str(e)}
