@@ -36,7 +36,7 @@ urlpatterns = [
     path("profile/relations/<str:other_uid>/", views.relations, name="relations_detail"),
 
     # Chat History
-    path("chat/<str:room>/history/", views.chat_history, name="chat_history"),
+    path("chat/<str:room_name>/", views.chat_history, name="chat_history"),
 
     # ------------------------------
     # Public profile (dynamic) — ¡AL FINAL!

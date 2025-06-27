@@ -7,6 +7,7 @@ import requests
 from django.http import JsonResponse
 from django.views.decorators.csrf import csrf_exempt
 from django.http.multipartparser import MultiPartParser
+from django.views.decorators.http import require_GET
 
 from firebase_admin import auth as firebase_auth
 from google.cloud import firestore
@@ -699,18 +700,13 @@ def friend_detail(request, friend_uid):
 # --------------------------------------------------------------------------------
 
 
-def chat_history(request, room):
-    """
-    GET /api/chat/<room>/history/ → historial de chat desde base SQL
-    """
-    if request.method != "GET":
-        return JsonResponse({"error": "Método no permitido"}, status=405)
-    mensajes = ChatMessage.objects.filter(room=room)
-    data = [
-        {"user": m.user, "message": m.message, "timestamp": m.timestamp.isoformat()}
-        for m in mensajes
-    ]
-    return JsonResponse(data, safe=False)
+@require_GET
+def chat_history(request, room_name):
+    # Obtiene todos los mensajes de la sala, los ordena por id
+    msgs = ChatMessage.objects.filter(room=room_name).order_by("id") \
+             .values("user", "message")
+    # JsonResponse con lista de dicts: [{"user":"…","message":"…"}, …]
+    return JsonResponse(list(msgs), safe=False)
 
 
 @csrf_exempt
