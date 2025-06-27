@@ -7,6 +7,7 @@ urlpatterns = [
     # ------------------------------
     path("protegido/", views.vista_protegida, name="vista_protegida"),
     path("crear_usuario/", views.crear_usuario, name="crear_usuario"),
+    path("login_google/", views.login_google, name="login_google"),
 
     # ------------------------------
     # User’s own profile, pets, posts, friends, relations

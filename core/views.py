@@ -46,9 +46,84 @@ def vista_protegida(request):
     )
 
 
+@csrf_exempt
+@firebase_login_required
+def login_google(request):
+    """
+    POST /api/login_google/  →  Verifica idToken, crea perfil si no existe
+    Headers: Authorization: Bearer <idToken>
+    Body JSON opcional: { fullName?, username?, phone?, photoURL?, role? }
+    Responde también con listas de posts, friends y pets.
+    """
+    if request.method != "POST":
+        return JsonResponse({"error": "Método no permitido"}, status=405)
+
+    # 1) Datos decodificados por el decorator
+    decoded = request.user_firebase
+    uid = decoded["uid"]
+    email_token = decoded.get("email")
+    nombre_token = decoded.get("name", "")
+    photo_token = decoded.get("picture", "")
+
+    # 2) Leer overrides desde el body
+    try:
+        data = json.loads(request.body)
+    except json.JSONDecodeError:
+        data = {}
+
+    # 3) Referencia al documento de perfil
+    prof_ref = db.collection("profiles").document(uid)
+    prof_snap = prof_ref.get()
+
+    # 4) Si no existe perfil, lo creamos
+    if not prof_snap.exists:
+        timestamp = int(datetime.utcnow().timestamp())
+        code = int(f"{timestamp}{random.randint(0,9)}")
+
+        profile_data = {
+            "fullName": data.get("fullName", nombre_token),
+            "username": data.get("username", ""),
+            "email": data.get("email", email_token),
+            "phone": data.get("phone", ""),
+            "photoURL": data.get("photoURL", photo_token),
+            "role": data.get("role", "user"),
+            "code": data.get("code", code),
+            "createdAt": datetime.utcnow(),
+        }
+        prof_ref.set(profile_data)
+    else:
+        profile_data = prof_snap.to_dict()
+        code = profile_data.get("code")
+
+    # 5) Leer sub-colecciones: posts, friends, pets
+    def fetch_collection(name):
+        col = prof_ref.collection(name).get()
+        return [doc.to_dict() for doc in col]
+
+    posts = fetch_collection("posts")
+    friends = fetch_collection("friends")
+    pets = fetch_collection("pets")
+
+    # 6) Respuesta final
+    return JsonResponse(
+        {
+            "mensaje": "Login exitoso",
+            "uid": uid,
+            "role": profile_data.get("role"),
+            "code": code,
+            "profile": profile_data,
+            "posts": posts,
+            "friends": friends,
+            "pets": pets,
+        },
+        status=200,
+    )
+
+
 # --------------------------------------------------------------------------------
 # User Registration & Profile
 # --------------------------------------------------------------------------------
+
 
 @csrf_exempt
 def crear_usuario(request):
