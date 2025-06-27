@@ -50,7 +50,7 @@ def vista_protegida(request):
 # User Registration & Profile
 # --------------------------------------------------------------------------------
 
-
+@csrf_exempt
 def crear_usuario(request):
     """
     POST /api/register/ → crea usuario en Firebase Auth + Firestore profile
