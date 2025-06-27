@@ -1,161 +1,150 @@
 <!DOCTYPE html>
 <html lang="es">
-
 <head>
   <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Chat de Prueba</title>
   <style>
-    body {
-      font-family: sans-serif;
-      display: flex;
-      height: 100vh;
-      margin: 0;
-    }
-
-    #profiles {
-      width: 25%;
-      border-right: 1px solid #ccc;
-      overflow-y: auto;
-    }
-
-    #profiles ul {
-      list-style: none;
-      padding: 0;
-    }
-
-    #profiles li {
-      padding: 8px;
-      cursor: pointer;
-      border-bottom: 1px solid #eee;
-    }
-
-    #profiles li.active {
-      background: #f0f0f0;
-    }
-
-    #chat {
-      flex: 1;
-      display: flex;
-      flex-direction: column;
-    }
-
-    #messages {
-      flex: 1;
-      overflow-y: auto;
-      padding: 10px;
-    }
-
-    .msg {
-      margin: 4px 0;
-      max-width: 60%;
-      padding: 6px 10px;
-      border-radius: 8px;
-    }
-
-    .me {
-      align-self: flex-end;
-      background: #DCF8C6;
-    }
-
-    .them {
-      align-self: flex-start;
-      background: #F1F0F0;
-    }
-
-    #input {
-      display: flex;
-    }
-
-    #input input {
-      flex: 1;
-      padding: 8px;
-      border: 1px solid #ccc;
-      border-top: none;
-    }
-
-    #input button {
-      padding: 8px 12px;
-    }
+    body { font-family: sans-serif; margin: 0; height: 100vh; display: flex; flex-direction: column; }
+    #login { flex: 1; display: flex; justify-content: center; align-items: center; }
+    #app { flex: 1; display: none; }
+    .container { display: flex; height: 100%; }
+    #profiles { width: 25%; border-right: 1px solid #ccc; overflow-y: auto; }
+    #profiles h3 { margin: 0; padding: 10px; background: #f5f5f5; }
+    #profiles ul { list-style: none; padding: 0; margin: 0; }
+    #profiles li { padding: 8px; cursor: pointer; border-bottom: 1px solid #eee; display: flex; align-items: center; }
+    #profiles li.active { background: #e9f5ef; }
+    #profiles img { border-radius: 50%; margin-right: 8px; width: 30px; height: 30px; }
+    #chat { flex: 1; display: flex; flex-direction: column; }
+    #messages { flex: 1; overflow-y: auto; padding: 10px; background: #fafafa; }
+    .msg { margin: 4px 0; padding: 6px 10px; border-radius: 8px; max-width: 60%; word-wrap: break-word; }
+    .me { align-self: flex-end; background: #DCF8C6; }
+    .them { align-self: flex-start; background: #F1F0F0; }
+    #input { display: flex; border-top: 1px solid #ccc; }
+    #input input { flex: 1; padding: 8px; border: none; outline: none; }
+    #input button { padding: 8px 16px; border: none; background: #006353; color: white; cursor: pointer; }
   </style>
 </head>
-
 <body>
-  <div id="profiles">
-    <h3>Perfiles</h3>
-    <ul id="list"></ul>
+  <div id="login">
+    <button id="loginBtn">Iniciar sesión con Google</button>
   </div>
-  <div id="chat">
-    <div id="messages"></div>
-    <div id="input">
-      <input id="msgInput" type="text" placeholder="Escribe un mensaje…">
-      <button id="sendBtn">Enviar</button>
+
+  <div id="app">
+    <div class="container">
+      <div id="profiles">
+        <h3>Perfiles</h3>
+        <ul id="list"></ul>
+      </div>
+      <div id="chat">
+        <div id="messages"></div>
+        <div id="input">
+          <input id="msgInput" type="text" placeholder="Escribe un mensaje…" />
+          <button id="sendBtn">Enviar</button>
+        </div>
+      </div>
     </div>
   </div>
 
+  <!-- Firebase SDKs -->
+  <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-auth-compat.js"></script>
+
   <script>
-    const apiBase = '/api';
+    // Configuración de Firebase (reemplaza con tus credenciales)
+    const firebaseConfig = {
+      apiKey: "TU_API_KEY",
+      authDomain: "TU_AUTH_DOMAIN",
+      projectId: "TU_PROJECT_ID",
+      // ...otras propiedades
+    };
+    firebase.initializeApp(firebaseConfig);
+    const auth = firebase.auth();
+
+    let idToken = null;
+    let currentUid = null;
+    let currentUsername = null;
     let socket = null;
-    let currentRoom = null;
-    let idToken = null;  // tu token Firebase
 
-    // 1) Pide token al usuario (solo para pruebas)
-    idToken = prompt('Pega aquí tu Firebase ID token para autenticación:');
+    // 1) Login con Google
+    document.getElementById('loginBtn').onclick = () => {
+      const provider = new firebase.auth.GoogleAuthProvider();
+      auth.signInWithPopup(provider)
+        .then(async (result) => {
+          const user = result.user;
+          idToken = await user.getIdToken();
+          currentUid = user.uid;
+          currentUsername = user.displayName || user.email;
+          document.getElementById('login').style.display = 'none';
+          document.getElementById('app').style.display = 'flex';
+          loadProfiles();
+        })
+        .catch(console.error);
+    };
 
-    // 2) Carga la lista de perfiles
-    fetch(`${apiBase}/profile_list/`)
-      .then(res => res.json())
-      .then(perfiles => {
-        const ul = document.getElementById('list');
-        perfiles.forEach(p => {
-          const li = document.createElement('li');
-          li.textContent = p.username || p.uid;
-          li.dataset.uid = p.uid;
-          li.onclick = () => selectProfile(li);
-          ul.appendChild(li);
-        });
-      })
-      .catch(console.error);
+    // 2) Carga lista de perfiles
+    function loadProfiles() {
+      fetch('/api/profile_list/')
+        .then(res => res.json())
+        .then(perfiles => {
+          const ul = document.getElementById('list');
+          ul.innerHTML = '';
+          perfiles.forEach(p => {
+            // No mostrarse a sí mismo
+            if (p.uid === currentUid) return;
+            const li = document.createElement('li');
+            li.dataset.uid = p.uid;
+            // Avatar
+            if (p.avatar) {
+              const img = document.createElement('img'); img.src = p.avatar;
+              li.appendChild(img);
+            }
+            const span = document.createElement('span');
+            span.textContent = p.username || p.uid;
+            li.appendChild(span);
+            li.onclick = () => selectProfile(li);
+            ul.appendChild(li);
+          });
+        })
+        .catch(console.error);
+    }
 
-    // 3) Al hacer click en un perfil, inicializa WebSocket
+    // 3) Selección de perfil: conexión a sala única
     function selectProfile(li) {
       // Marca activo
       document.querySelectorAll('#profiles li').forEach(x => x.classList.remove('active'));
       li.classList.add('active');
 
-      // Si ya hay socket abierto, ciérralo
-      if (socket) socket.close();
+      const targetUid = li.dataset.uid;
+      // Genera nombre de sala consistente para ambos usuarios
+      const roomParts = [currentUid, targetUid].sort();
+      const roomName = roomParts.join('_');
 
-      currentRoom = li.dataset.uid;
-      openSocket(currentRoom);
+      if (socket) socket.close();
+      openSocket(roomName);
+      clearMessages();
     }
 
     function openSocket(roomName) {
       const protocol = location.protocol === 'https:' ? 'wss' : 'ws';
       socket = new WebSocket(`${protocol}://${location.host}/ws/chat/${roomName}/`);
 
-      socket.addEventListener('open', () => {
-        // 3.1) Envía mensaje de auth
+      socket.onopen = () => {
+        // Autenticación WebSocket
         socket.send(JSON.stringify({ type: 'auth', token: idToken }));
-      });
+      };
 
-      socket.addEventListener('message', ev => {
+      socket.onmessage = ev => {
         const data = JSON.parse(ev.data);
-        if (data.type === 'auth.success') {
-          console.log('Autenticado en sala', roomName);
-        } else if (data.type === 'history' || data.type === 'chat.message') {
+        if (data.type === 'history' || data.type === 'chat.message') {
           appendMessage(data.user, data.message);
         }
-      });
-
-      socket.addEventListener('close', ev => {
-        console.log('Socket cerrado', ev);
-      });
-
-      // 4) Manejar envío de mensajes
-      document.getElementById('sendBtn').onclick = sendMessage;
-      document.getElementById('msgInput').onkeyup = e => {
-        if (e.key === 'Enter') sendMessage();
       };
+
+      socket.onclose = e => console.log('WebSocket cerrado', e);
+
+      document.getElementById('sendBtn').onclick = sendMessage;
+      document.getElementById('msgInput').onkeyup = e => { if (e.key === 'Enter') sendMessage(); };
     }
 
     function sendMessage() {
@@ -168,13 +157,16 @@
 
     function appendMessage(user, message) {
       const div = document.createElement('div');
-      div.className = 'msg ' + (user === 'undefined' || user === null ? 'them' : (user === 'you' ? 'me' : 'them'));
+      const isMe = (user === currentUsername || user === currentUid);
+      div.className = 'msg ' + (isMe ? 'me' : 'them');
       div.textContent = `${user}: ${message}`;
       document.getElementById('messages').appendChild(div);
-      // Auto-scroll
       document.getElementById('messages').scrollTop = 1e9;
+    }
+
+    function clearMessages() {
+      document.getElementById('messages').innerHTML = '';
     }
   </script>
 </body>
-
 </html>
