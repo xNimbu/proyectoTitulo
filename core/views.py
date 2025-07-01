@@ -483,11 +483,14 @@ def user_posts(request):
             )
             if resp.status_code == 200:
                 photoURL = resp.json()["data"]["url"]
+        pet_id = request.POST.get("pet_id")
         new_post = {
             "content": content,
             "photoURL": photoURL,
             "timestamp": datetime.utcnow(),
         }
+        if pet_id:
+            new_post["pet_id"] = pet_id
         _, doc_ref = col.add(new_post)
         return JsonResponse({"mensaje": "Post creado", "id": doc_ref.id}, status=201)
 
@@ -512,12 +515,25 @@ def user_post_detail(request, post_id):
         old = snap.to_dict()
         doc.update(
             {
-                "content": data.get("content", old.get("content")),
-                "photoURL": data.get("photoURL", old.get("photoURL")),
-                "timestamp": datetime.utcnow(),
+            "content": data.get("content", old.get("content")),
+            "photoURL": data.get("photoURL", old.get("photoURL")),
+            "timestamp": datetime.utcnow(),
             }
         )
-        return JsonResponse({"mensaje": "Post actualizado"})
+        # Si el post tiene pet_id, obtener datos de la mascota
+        pet_data = None
+        pet_id = old.get("pet_id") or data.get("pet_id")
+        if pet_id:
+            pet_ref = db.collection("profiles").document(uid).collection("pets").document(pet_id)
+            pet_snap = pet_ref.get()
+            if pet_snap.exists:
+                pet = pet_snap.to_dict()
+                pet["id"] = pet_snap.id
+                pet_data = pet
+        response = {"mensaje": "Post actualizado"}
+        if pet_data:
+            response["pet"] = pet_data
+        return JsonResponse(response)
 
     elif request.method == "DELETE":
         doc.delete()
