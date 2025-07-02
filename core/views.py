@@ -226,15 +226,22 @@ def profile(request):
         posts = []
         for post_snap in (
             doc_ref.collection("posts")
-            .order_by("timestamp", direction=firestore.Query.DESCENDING)
-            .stream()
+                .order_by("timestamp", direction=firestore.Query.DESCENDING)
+                .stream()
         ):
-            post = post_snap.to_dict()
-            post["id"] = post_snap.id
-            post["timestamp"] = (
-                post.get("timestamp").isoformat() if post.get("timestamp") else None
-            )
-            posts.append(post)
+            p = post_snap.to_dict()
+            p["id"] = post_snap.id
+            p["timestamp"] = p.get("timestamp").isoformat() if p.get("timestamp") else None
+
+            # ——> fetch de comentarios:
+            comments = []
+            for c_snap in db.collection("posts").document(p["id"]).collection("comments").order_by("timestamp").stream():
+                c = c_snap.to_dict()
+                c["id"] = c_snap.id
+                comments.append(c)
+            p["comments"] = comments
+
+            posts.append(p)
         profile_data["posts"] = posts
 
         # Amigos
@@ -462,12 +469,23 @@ def user_posts(request):
 
     if request.method == "GET":
         posts = []
-        for snap in col.order_by(
-            "timestamp", direction=firestore.Query.DESCENDING
-        ).stream():
+        for snap in col.order_by("timestamp", direction=firestore.Query.DESCENDING).stream():
             post = snap.to_dict()
-            post["id"] = snap.id
+            post_id = snap.id
+            post["id"] = post_id
+
+            # ——> aquí obtenemos sus comentarios:
+            comments = []
+            # Fíjate que tu vista de comments usa la colección global "posts"
+            comments_col = db.collection("posts").document(post_id).collection("comments")
+            for c_snap in comments_col.order_by("timestamp").stream():
+                c = c_snap.to_dict()
+                c["id"] = c_snap.id
+                comments.append(c)
+            post["comments"] = comments
+
             posts.append(post)
+
         return JsonResponse({"posts": posts})
 
     elif request.method == "POST":
