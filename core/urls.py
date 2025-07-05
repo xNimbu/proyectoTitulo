@@ -26,6 +26,7 @@ urlpatterns = [
     # Comments on any post
     path("posts/<str:post_id>/comments/", views.comments, name="comments"),
     path("posts/<str:post_id>/comments/<str:comment_id>/", views.comment_detail, name="comment_detail"),
+    path("posts/<str:post_id>/likes/", views.likes, name="likes"),
 
     # Friends CRUD
     path("profile/friends/", views.friends, name="friends"),
