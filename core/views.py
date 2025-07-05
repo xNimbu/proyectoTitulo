@@ -744,6 +744,51 @@ def friends_posts(request):
     return JsonResponse({"posts": posts})
 
 
+@require_GET
+@firebase_login_required
+def posts_by_user(request, user_uid):
+    """Lista los posts públicos de un usuario específico."""
+
+    doc_ref = db.collection("profiles").document(user_uid)
+    if not doc_ref.get().exists:
+        return JsonResponse({"error": "Perfil no encontrado"}, status=404)
+
+    resultados = []
+    col = (
+        doc_ref
+        .collection("posts")
+        .order_by("timestamp", direction=firestore.Query.DESCENDING)
+    )
+    for snap in col.stream():
+        post = snap.to_dict()
+        post_id = snap.id
+        post["id"] = post_id
+
+        comments = []
+        comments_col = (
+            db.collection("posts")
+            .document(post_id)
+            .collection("comments")
+        )
+        for c_snap in comments_col.order_by("timestamp").stream():
+            c = c_snap.to_dict()
+            c["id"] = c_snap.id
+            comments.append(c)
+        post["comments"] = comments
+
+        likes = get_post_likes(post_id)
+        post["likes"] = likes
+        post["likesCount"] = len(likes)
+
+        ts = post.get("timestamp")
+        if ts:
+            post["timestamp"] = ts.isoformat()
+
+        resultados.append(post)
+
+    return JsonResponse({"posts": resultados})
+
+
 # --------------------------------------------------------------------------------
 # Friends CRUD
 # --------------------------------------------------------------------------------

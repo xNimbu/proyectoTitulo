@@ -22,6 +22,7 @@ urlpatterns = [
     # Posts CRUD
     path("profile/posts/", views.user_posts, name="user_posts"),
     path("profile/posts/<str:post_id>/", views.user_post_detail, name="user_post_detail"),
+    path("profile/posts/user/<str:uid>/", views.posts_by_user, name="posts_by_user"),
 
     # Posts from user and friends
     path("profile/friends/posts/", views.friends_posts, name="friends_posts"),
