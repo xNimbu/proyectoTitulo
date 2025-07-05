@@ -32,6 +32,14 @@ urlpatterns = [
     path("posts/<str:post_id>/comments/<str:comment_id>/", views.comment_detail, name="comment_detail"),
     path("posts/<str:post_id>/likes/", views.likes, name="likes"),
 
+    # Notifications
+    path("profile/notifications/", views.notifications, name="notifications"),
+    path(
+        "profile/notifications/<str:notification_id>/",
+        views.notification_detail,
+        name="notification_detail",
+    ),
+
     # Friends CRUD
     path("profile/friends/", views.friends, name="friends"),
     path("profile/friends/<str:friend_uid>/", views.friend_detail, name="friend_detail"),
@@ -42,6 +50,7 @@ urlpatterns = [
 
     # Chat History
     path("chat/<str:room_name>/", views.chat_history, name="chat_history"),
+    path("chat/<str:room_name>/unread/", views.chat_unread_count, name="chat_unread_count"),
 
     # ------------------------------
     # Public profile (dynamic) — ¡AL FINAL!
