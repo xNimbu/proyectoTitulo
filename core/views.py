@@ -17,6 +17,7 @@ from .auth import firebase_login_required
 from core import auth as core_auth
 from core.auth import create_user
 from core.models import ChatMessage
+from .utils import upload_image_to_imgbb, get_post_likes
 
 # --------------------------------------------------------------------------------
 # Utility / Test Views
@@ -241,6 +242,10 @@ def profile(request):
                 comments.append(c)
             p["comments"] = comments
 
+            likes = get_post_likes(p["id"])
+            p["likes"] = likes
+            p["likesCount"] = len(likes)
+
             posts.append(p)
         profile_data["posts"] = posts
 
@@ -269,18 +274,9 @@ def profile(request):
         email = request.POST.get("email")
         phone = request.POST.get("phone")
 
-        # 2) Subimos la foto si viene
-        photoURL = None
+        # 2) Subimos la foto si viene usando imgbb
         image_file = request.FILES.get("image")
-        if image_file:
-            api_key = os.getenv("IMGBB_API_KEY")
-            resp = requests.post(
-                "https://api.imgbb.com/1/upload",
-                params={"key": api_key},
-                files={"image": image_file.read()},
-            )
-            if resp.ok:
-                photoURL = resp.json()["data"]["url"]
+        photoURL = upload_image_to_imgbb(image_file)
 
         # 3) Armamos el dict de actualización
         update = {}
@@ -353,6 +349,9 @@ def profile_detail(request, uid):
         p = post_snap.to_dict()
         p["id"] = post_snap.id
         p["timestamp"] = p.get("timestamp").isoformat() if p.get("timestamp") else None
+        likes = get_post_likes(p["id"])
+        p["likes"] = likes
+        p["likesCount"] = len(likes)
         posts.append(p)
     profile_data["posts"] = posts
 
@@ -484,6 +483,10 @@ def user_posts(request):
                 comments.append(c)
             post["comments"] = comments
 
+            likes = get_post_likes(post_id)
+            post["likes"] = likes
+            post["likesCount"] = len(likes)
+
             posts.append(post)
 
         return JsonResponse({"posts": posts})
@@ -491,16 +494,7 @@ def user_posts(request):
     elif request.method == "POST":
         content = request.POST.get("content", "")
         image_file = request.FILES.get("image")
-        photoURL = ""
-        if image_file:
-            api_key = os.getenv("IMGBB_API_KEY")
-            resp = requests.post(
-                "https://api.imgbb.com/1/upload",
-                params={"key": api_key},
-                files={"image": image_file.read()},
-            )
-            if resp.status_code == 200:
-                photoURL = resp.json()["data"]["url"]
+        photoURL = upload_image_to_imgbb(image_file) or ""
         pet_id = request.POST.get("pet_id")
         new_post = {
             "content": content,
@@ -510,6 +504,8 @@ def user_posts(request):
         if pet_id:
             new_post["pet_id"] = pet_id
         _, doc_ref = col.add(new_post)
+        # crea documento global para comentarios/likes
+        db.collection("posts").document(doc_ref.id).set({"owner": uid}, merge=True)
         return JsonResponse({"mensaje": "Post creado", "id": doc_ref.id}, status=201)
 
     return JsonResponse({"error": "Método no permitido"}, status=405)
@@ -555,6 +551,7 @@ def user_post_detail(request, post_id):
 
     elif request.method == "DELETE":
         doc.delete()
+        db.collection("posts").document(post_id).delete()
         return JsonResponse({"mensaje": "Post eliminado"})
 
     return JsonResponse({"error": "Método no permitido"}, status=405)
@@ -621,6 +618,36 @@ def comment_detail(request, post_id, comment_id):
     elif request.method == "DELETE":
         ref.delete()
         return JsonResponse({"mensaje": "Comentario eliminado"})
+
+    return JsonResponse({"error": "Método no permitido"}, status=405)
+
+
+@csrf_exempt
+@firebase_login_required
+def likes(request, post_id):
+    """Gestiona likes de un post."""
+    col = db.collection("posts").document(post_id).collection("likes")
+
+    if request.method == "GET":
+        likes = get_post_likes(post_id)
+        return JsonResponse({"count": len(likes), "likes": likes})
+
+    elif request.method == "POST":
+        user = request.user_firebase
+        uid = user["uid"]
+        profile = db.collection("profiles").document(uid).get()
+        username = ""
+        if profile.exists:
+            username = profile.to_dict().get("username", "")
+        like_ref = col.document(uid)
+        if like_ref.get().exists:
+            like_ref.delete()
+            liked = False
+        else:
+            like_ref.set({"username": username})
+            liked = True
+        likes = get_post_likes(post_id)
+        return JsonResponse({"liked": liked, "count": len(likes), "likes": likes})
 
     return JsonResponse({"error": "Método no permitido"}, status=405)
 
