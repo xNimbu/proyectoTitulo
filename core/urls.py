@@ -23,6 +23,9 @@ urlpatterns = [
     path("profile/posts/", views.user_posts, name="user_posts"),
     path("profile/posts/<str:post_id>/", views.user_post_detail, name="user_post_detail"),
 
+    # Posts from user and friends
+    path("profile/friends/posts/", views.friends_posts, name="friends_posts"),
+
     # Comments on any post
     path("posts/<str:post_id>/comments/", views.comments, name="comments"),
     path("posts/<str:post_id>/comments/<str:comment_id>/", views.comment_detail, name="comment_detail"),
