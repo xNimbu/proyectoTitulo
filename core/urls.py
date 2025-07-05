@@ -42,5 +42,10 @@ urlpatterns = [
     # ------------------------------
     # Public profile (dynamic) — ¡AL FINAL!
     # ------------------------------
+    path(
+        "profile/username/<str:username>/",
+        views.profile_by_username,
+        name="profile_by_username",
+    ),
     path("profile/<str:uid>/", views.profile_detail, name="profile_detail"),
 ]

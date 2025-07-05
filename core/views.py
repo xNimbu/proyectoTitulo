@@ -371,6 +371,32 @@ def profile_detail(request, uid):
 
 
 @csrf_exempt
+@firebase_login_required
+def profile_by_username(request, username):
+    """Obtiene el perfil público de un usuario por su nombre de usuario."""
+    if request.method != "GET":
+        return JsonResponse({"error": "Método no permitido"}, status=405)
+
+    query = (
+        db.collection("profiles")
+        .where("username", "==", username)
+        .limit(1)
+        .stream()
+    )
+
+    uid = None
+    for snap in query:
+        uid = snap.id
+        break
+
+    if not uid:
+        return JsonResponse({"error": "Perfil no encontrado"}, status=404)
+
+    # Reutilizar la lógica de `profile_detail`
+    return profile_detail(request, uid)
+
+
+@csrf_exempt
 def profile_list(request):
     """
     GET /api/profile_list/ → lista pública de perfiles, admite ?q= para filtrar por username
