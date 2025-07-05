@@ -40,14 +40,17 @@ class ChatConsumer(AsyncWebsocketConsumer):
         try:
             from core.models import ChatMessage
 
-            def fetch_history():
-                return list(
-                    ChatMessage.objects.filter(room=self.room)
-                    .order_by("id")
-                    .values("user", "message")[:50]
-                )
+            def fetch_history_and_mark():
+                mensajes = ChatMessage.objects.filter(room=self.room).order_by("id")[:50]
+                datos = []
+                for m in mensajes:
+                    if self.user_id not in m.read_by:
+                        m.read_by.append(self.user_id)
+                        m.save(update_fields=["read_by"])
+                    datos.append({"user": m.user, "message": m.message})
+                return datos
 
-            history = await database_sync_to_async(fetch_history)()
+            history = await database_sync_to_async(fetch_history_and_mark)()
             for msg in history:
                 await self.send(
                     text_data=json.dumps(
@@ -68,7 +71,10 @@ class ChatConsumer(AsyncWebsocketConsumer):
         from core.models import ChatMessage
 
         msg_obj = await database_sync_to_async(ChatMessage.objects.create)(
-            room=self.room, user=self.username, message=data.get("message", "")
+            room=self.room,
+            user=self.username,
+            message=data.get("message", ""),
+            read_by=[self.user_id],
         )
         await self.channel_layer.group_send(
             self.room_group,

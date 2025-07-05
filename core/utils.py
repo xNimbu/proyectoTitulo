@@ -1,6 +1,19 @@
 import os
 import requests
 from .firebase_config import db
+from datetime import datetime
+
+
+def add_notification(uid, message, type="info", extra=None):
+    """Create a notification document for a user profile."""
+    notif = {
+        "message": message,
+        "type": type,
+        "extra": extra or {},
+        "timestamp": datetime.utcnow(),
+        "read": False,
+    }
+    db.collection("profiles").document(uid).collection("notifications").add(notif)
 
 def upload_image_to_imgbb(image_file):
     """Upload an image file to imgbb and return the URL or None."""

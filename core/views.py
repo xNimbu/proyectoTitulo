@@ -18,6 +18,7 @@ from core import auth as core_auth
 from core.auth import create_user
 from core.models import ChatMessage
 from .utils import upload_image_to_imgbb, get_post_likes
+from .utils import add_notification
 
 # --------------------------------------------------------------------------------
 # Utility / Test Views
@@ -610,6 +611,15 @@ def comments(request, post_id):
             "timestamp": datetime.utcnow(),
         }
         _, doc_ref = col.add(new_comment)
+        post_snap = db.collection("posts").document(post_id).get()
+        owner = post_snap.to_dict().get("owner") if post_snap.exists else None
+        if owner and owner != user["uid"]:
+            add_notification(
+                owner,
+                f"{user['email']} coment\u00f3 tu publicaci\u00f3n",
+                "comment",
+                {"postId": post_id},
+            )
         return JsonResponse(
             {"mensaje": "Comentario agregado", "id": doc_ref.id}, status=201
         )
@@ -672,6 +682,15 @@ def likes(request, post_id):
         else:
             like_ref.set({"username": username})
             liked = True
+            post_snap = db.collection("posts").document(post_id).get()
+            owner = post_snap.to_dict().get("owner") if post_snap.exists else None
+            if owner and owner != uid:
+                add_notification(
+                    owner,
+                    f"{username or user['email']} le dio like a tu publicaci\u00f3n",
+                    "like",
+                    {"postId": post_id},
+                )
         likes = get_post_likes(post_id)
         return JsonResponse({"liked": liked, "count": len(likes), "likes": likes})
 
@@ -850,6 +869,13 @@ def friends(request):
         }
         other_ref.collection("friends").document(uid).set(record_other)
 
+        add_notification(
+            target_uid,
+            f"{me_data.get('username', '') or uid} te agreg\u00f3 como amigo",
+            "friend",
+            {"uid": uid},
+        )
+
         return JsonResponse(
             {
                 "mensaje": "Amigo agregado bidireccionalmente",
@@ -899,12 +925,18 @@ def friend_detail(request, friend_uid):
 
 
 @require_GET
+@firebase_login_required
 def chat_history(request, room_name):
-    # Obtiene todos los mensajes de la sala, los ordena por id
-    msgs = ChatMessage.objects.filter(room=room_name).order_by("id") \
-             .values("user", "message")
-    # JsonResponse con lista de dicts: [{"user":"…","message":"…"}, …]
-    return JsonResponse(list(msgs), safe=False)
+    """Devuelve historial y marca mensajes como leídos por el usuario."""
+    uid = request.user_firebase["uid"]
+    msgs = ChatMessage.objects.filter(room=room_name).order_by("id")
+    data = []
+    for msg in msgs:
+        if uid not in msg.read_by:
+            msg.read_by.append(uid)
+            msg.save(update_fields=["read_by"])
+        data.append({"user": msg.user, "message": msg.message})
+    return JsonResponse(data, safe=False)
 
 
 @csrf_exempt
@@ -959,3 +991,51 @@ def relations(request, other_uid=None):
         return JsonResponse({"mensaje": f"{subcol[:-1].capitalize()} eliminado"})
 
     return JsonResponse({"error": "Método no permitido"}, status=405)
+
+
+@csrf_exempt
+@firebase_login_required
+def notifications(request):
+    """Lista y crea notificaciones del usuario (solo GET)."""
+    uid = request.user_firebase["uid"]
+    col = db.collection("profiles").document(uid).collection("notifications")
+
+    if request.method == "GET":
+        items = []
+        for snap in col.order_by("timestamp", direction=firestore.Query.DESCENDING).stream():
+            d = snap.to_dict()
+            d["id"] = snap.id
+            ts = d.get("timestamp")
+            if ts:
+                d["timestamp"] = ts.isoformat()
+            items.append(d)
+        return JsonResponse({"notifications": items})
+
+    return JsonResponse({"error": "Método no permitido"}, status=405)
+
+
+@csrf_exempt
+@firebase_login_required
+def notification_detail(request, notification_id):
+    """Marca una notificación como leída o la elimina."""
+    uid = request.user_firebase["uid"]
+    doc = db.collection("profiles").document(uid).collection("notifications").document(notification_id)
+
+    if request.method == "PATCH":
+        doc.update({"read": True})
+        return JsonResponse({"mensaje": "Notificación leída"})
+
+    elif request.method == "DELETE":
+        doc.delete()
+        return JsonResponse({"mensaje": "Notificación eliminada"})
+
+    return JsonResponse({"error": "Método no permitido"}, status=405)
+
+
+@firebase_login_required
+def chat_unread_count(request, room_name):
+    """Devuelve cantidad de mensajes no leídos en una sala."""
+    uid = request.user_firebase["uid"]
+    from django.db.models import Q
+    count = ChatMessage.objects.filter(room=room_name).exclude(read_by__contains=[uid]).count()
+    return JsonResponse({"unread": count})
