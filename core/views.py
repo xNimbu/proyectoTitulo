@@ -678,6 +678,72 @@ def likes(request, post_id):
     return JsonResponse({"error": "Método no permitido"}, status=405)
 
 
+@csrf_exempt
+@firebase_login_required
+def friends_posts(request):
+    """Lista los posts propios y los de todos los amigos mezclados."""
+
+    if request.method != "GET":
+        return JsonResponse({"error": "Método no permitido"}, status=405)
+
+    uid = request.user_firebase["uid"]
+    profile_ref = db.collection("profiles").document(uid)
+
+    def collect_posts(user_uid):
+        """Devuelve la lista de posts de un usuario con owner, comments y likes."""
+        profile = db.collection("profiles").document(user_uid).get().to_dict() or {}
+        owner_info = {
+            "uid": user_uid,
+            "username": profile.get("username", ""),
+            "avatar": profile.get("photoURL", ""),
+        }
+
+        resultados = []
+        col = (
+            db.collection("profiles")
+            .document(user_uid)
+            .collection("posts")
+            .order_by("timestamp", direction=firestore.Query.DESCENDING)
+        )
+        for snap in col.stream():
+            post = snap.to_dict()
+            post_id = snap.id
+            post["id"] = post_id
+            post["owner"] = owner_info
+
+            comments = []
+            comments_col = (
+                db.collection("posts")
+                .document(post_id)
+                .collection("comments")
+            )
+            for c_snap in comments_col.order_by("timestamp").stream():
+                c = c_snap.to_dict()
+                c["id"] = c_snap.id
+                comments.append(c)
+            post["comments"] = comments
+
+            likes = get_post_likes(post_id)
+            post["likes"] = likes
+            post["likesCount"] = len(likes)
+
+            resultados.append(post)
+        return resultados
+
+    posts = collect_posts(uid)
+
+    for friend_snap in profile_ref.collection("friends").stream():
+        posts.extend(collect_posts(friend_snap.id))
+
+    posts.sort(key=lambda p: p.get("timestamp"), reverse=True)
+    for p in posts:
+        ts = p.get("timestamp")
+        if ts:
+            p["timestamp"] = ts.isoformat()
+
+    return JsonResponse({"posts": posts})
+
+
 # --------------------------------------------------------------------------------
 # Friends CRUD
 # --------------------------------------------------------------------------------
