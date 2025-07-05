@@ -31,10 +31,12 @@
 
 <body>
 
-    <h2>Ver mis publicaciones</h2>
+    <h2>Ver publicaciones</h2>
 
     <label>Token Firebase:</label>
     <textarea id="token" rows="3" placeholder="Pega aquí tu token Firebase"></textarea>
+    <label>UID (opcional):</label>
+    <input type="text" id="uid" placeholder="UID para listar posts" />
 
     <h3>Crear nueva publicación</h3>
     <textarea id="postContent" rows="3" placeholder="Escribe algo..." id="nuevoContenido"></textarea>
@@ -76,11 +78,16 @@
 
         async function cargarPosts() {
             const token = document.getElementById("token").value;
+            const uid = document.getElementById("uid").value.trim();
             const contenedor = document.getElementById("resultados");
             contenedor.innerHTML = "Cargando...";
 
+            const url = uid
+                ? `https://proyectotitulo.onrender.com/api/profile/posts/user/${uid}/`
+                : "https://proyectotitulo.onrender.com/api/profile/posts/";
+
             try {
-                const res = await fetch("https://proyectotitulo.onrender.com/api/profile/posts/", {
+                const res = await fetch(url, {
                     headers: {
                         Authorization: "Bearer " + token,
                     },
