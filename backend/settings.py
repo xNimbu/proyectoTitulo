@@ -74,6 +74,8 @@ CORS_ALLOWED_ORIGINS = [
     "http://127.0.0.1:5500",
     "http://localhost:4200",
     "https://proyectotitulo.onrender.com",
+    'https://petlink-d54eb.web.app',
+    'https://petlink-d54eb.firebaseapp.com'
 ]
 
 CORS_ALLOW_HEADERS = [
