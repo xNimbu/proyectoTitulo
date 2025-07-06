@@ -442,13 +442,15 @@ def pets(request):
         return JsonResponse({"pets": pets_list})
 
     elif request.method == "POST":
+        image_file = request.FILES.get("image")
+        photoURL = upload_image_to_imgbb(image_file) or ""
         data = json.loads(request.body)
         nueva = {
             "name": data["name"],
             "breed": data.get("breed"),
             "age": data.get("age"),
             "type": data.get("type"),
-            "photoURL": data.get("photoURL"),
+            "photoURL": photoURL,
         }
         _, doc_ref = col.add(nueva)
         return JsonResponse({"mensaje": "Mascota creada", "id": doc_ref.id}, status=201)
