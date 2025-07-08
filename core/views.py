@@ -444,9 +444,14 @@ def pets(request):
     elif request.method == "POST":
         image_file = request.FILES.get("image")
         photoURL = upload_image_to_imgbb(image_file) or ""
-        data = json.loads(request.body)
+        data = request.POST.dict()
+        if not data:
+            try:
+                data = json.loads(request.body or "{}")
+            except json.JSONDecodeError:
+                data = {}
         nueva = {
-            "name": data["name"],
+            "name": data.get("name"),
             "breed": data.get("breed"),
             "age": data.get("age"),
             "type": data.get("type"),
@@ -469,7 +474,19 @@ def pet_detail(request, pet_id):
     doc = db.collection("profiles").document(uid).collection("pets").document(pet_id)
 
     if request.method == "PUT":
-        data = json.loads(request.body)
+        data = request.POST.dict()
+        if not data:
+            try:
+                data = json.loads(request.body or "{}")
+            except json.JSONDecodeError:
+                data = {}
+        image_file = request.FILES.get("image")
+        if image_file:
+            photoURL = upload_image_to_imgbb(image_file) or ""
+            if photoURL:
+                data["photoURL"] = photoURL
+        if not data:
+            return JsonResponse({"error": "Sin datos para actualizar"}, status=400)
         doc.update(data)
         return JsonResponse({"mensaje": "Mascota actualizada"})
 
