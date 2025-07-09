@@ -9,15 +9,21 @@ from functools import wraps
 def firebase_login_required(view_func):
     @wraps(view_func)
     def _wrapped_view(request, *args, **kwargs):
-        id_token = request.META.get("HTTP_AUTHORIZATION")
+        """Verifica el token de Firebase en encabezado, cookie o query string."""
+        raw_auth = request.META.get("HTTP_AUTHORIZATION", "")
+        token = ""
 
-        if not id_token:
+        if raw_auth.startswith("Bearer "):
+            token = raw_auth.split(" ", 1)[1]
+
+        if not token:
+            token = request.COOKIES.get("token") or request.GET.get("token")
+
+        if not token:
             return JsonResponse({"error": "Token no proporcionado"}, status=401)
 
         try:
-            # El token se espera como: "Bearer <token>"
-            id_token = id_token.split(" ")[1]
-            decoded_token = auth.verify_id_token(id_token)
+            decoded_token = auth.verify_id_token(token)
             request.user_firebase = decoded_token
         except Exception as e:
             return JsonResponse({"error": f"Token inválido: {str(e)}"}, status=401)
