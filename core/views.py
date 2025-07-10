@@ -664,15 +664,8 @@ def comments(request, post_id):
     elif request.method == "POST":
         user = request.user_firebase
         data = json.loads(request.body)
-        # Obtener el username real del perfil
-        profile_ref = db.collection("profiles").document(user["uid"])
-        profile_snap = profile_ref.get()
-        username = user["email"]
-        if profile_snap.exists:
-            username = profile_snap.to_dict().get("username", user["email"])
         new_comment = {
             "userId": user["uid"],
-            "username": username,
             "message": data.get("message"),
             "timestamp": datetime.utcnow(),
         }
