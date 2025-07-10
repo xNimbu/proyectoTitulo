@@ -135,6 +135,7 @@ def login_google(request):
         status=200,
     )
 
+
 # --------------------------------------------------------------------------------
 # User Registration & Profile
 # --------------------------------------------------------------------------------
@@ -246,16 +247,24 @@ def profile(request):
         posts = []
         for post_snap in (
             doc_ref.collection("posts")
-                .order_by("timestamp", direction=firestore.Query.DESCENDING)
-                .stream()
+            .order_by("timestamp", direction=firestore.Query.DESCENDING)
+            .stream()
         ):
             p = post_snap.to_dict()
             p["id"] = post_snap.id
-            p["timestamp"] = p.get("timestamp").isoformat() if p.get("timestamp") else None
+            p["timestamp"] = (
+                p.get("timestamp").isoformat() if p.get("timestamp") else None
+            )
 
             # ——> fetch de comentarios:
             comments = []
-            for c_snap in db.collection("posts").document(p["id"]).collection("comments").order_by("timestamp").stream():
+            for c_snap in (
+                db.collection("posts")
+                .document(p["id"])
+                .collection("comments")
+                .order_by("timestamp")
+                .stream()
+            ):
                 c = c_snap.to_dict()
                 c["id"] = c_snap.id
                 comments.append(c)
@@ -409,10 +418,7 @@ def profile_by_username(request, username):
         return JsonResponse({"error": "Método no permitido"}, status=405)
 
     query = (
-        db.collection("profiles")
-        .where("username", "==", username)
-        .limit(1)
-        .stream()
+        db.collection("profiles").where("username", "==", username).limit(1).stream()
     )
 
     uid = None
@@ -555,7 +561,9 @@ def user_posts(request):
 
     if request.method == "GET":
         posts = []
-        for snap in col.order_by("timestamp", direction=firestore.Query.DESCENDING).stream():
+        for snap in col.order_by(
+            "timestamp", direction=firestore.Query.DESCENDING
+        ).stream():
             post = snap.to_dict()
             post_id = snap.id
             post["id"] = post_id
@@ -563,7 +571,9 @@ def user_posts(request):
             # ——> aquí obtenemos sus comentarios:
             comments = []
             # Fíjate que tu vista de comments usa la colección global "posts"
-            comments_col = db.collection("posts").document(post_id).collection("comments")
+            comments_col = (
+                db.collection("posts").document(post_id).collection("comments")
+            )
             for c_snap in comments_col.order_by("timestamp").stream():
                 c = c_snap.to_dict()
                 c["id"] = c_snap.id
@@ -616,16 +626,21 @@ def user_post_detail(request, post_id):
         old = snap.to_dict()
         doc.update(
             {
-            "content": data.get("content", old.get("content")),
-            "photoURL": data.get("photoURL", old.get("photoURL")),
-            "timestamp": datetime.utcnow(),
+                "content": data.get("content", old.get("content")),
+                "photoURL": data.get("photoURL", old.get("photoURL")),
+                "timestamp": datetime.utcnow(),
             }
         )
         # Si el post tiene pet_id, obtener datos de la mascota
         pet_data = None
         pet_id = old.get("pet_id") or data.get("pet_id")
         if pet_id:
-            pet_ref = db.collection("profiles").document(uid).collection("pets").document(pet_id)
+            pet_ref = (
+                db.collection("profiles")
+                .document(uid)
+                .collection("pets")
+                .document(pet_id)
+            )
             pet_snap = pet_ref.get()
             if pet_snap.exists:
                 pet = pet_snap.to_dict()
@@ -649,7 +664,7 @@ def user_post_detail(request, post_id):
 def comments(request, post_id):
     """
     GET  /api/profile/posts/<post_id>/comments/ → lista comentarios
-    POST /api/profile/posts/<post_id>/comments/ → crea comentario
+    POST /api/profile/posts/<post_id>/comments/ → crea comentario CON USERNAME
     """
     col = db.collection("posts").document(post_id).collection("comments")
 
@@ -664,21 +679,37 @@ def comments(request, post_id):
     elif request.method == "POST":
         user = request.user_firebase
         data = json.loads(request.body)
+
+        # ——— Obtener el username real del perfil ———
+        profile_ref = db.collection("profiles").document(user["uid"])
+        profile_snap = profile_ref.get()
+        username = ""
+        if profile_snap.exists:
+            username = profile_snap.to_dict().get("username", "")
+        # Si no hay username, toma la parte antes de la @ del email
+        if not username:
+            username = user.get("email", "").split("@")[0]
+
+        # ——— Creamos el comentario con username incluido ———
         new_comment = {
             "userId": user["uid"],
+            "username": username,
             "message": data.get("message"),
             "timestamp": datetime.utcnow(),
         }
         _, doc_ref = col.add(new_comment)
+
+        # ——— Notificación al dueño del post ———
         post_snap = db.collection("posts").document(post_id).get()
         owner = post_snap.to_dict().get("owner") if post_snap.exists else None
         if owner and owner != user["uid"]:
             add_notification(
                 owner,
-                f"{user['email']} coment\u00f3 tu publicaci\u00f3n",
+                f"{username} comentó tu publicación",
                 "comment",
                 {"postId": post_id},
             )
+
         return JsonResponse(
             {"mensaje": "Comentario agregado", "id": doc_ref.id}, status=201
         )
@@ -710,7 +741,9 @@ def comment_detail(request, post_id, comment_id):
 
     # Verifica si el comentario le pertenece al usuario actual
     if comment_data.get("userId") != user_uid:
-        return JsonResponse({"error": "No tienes permiso para modificar este comentario"}, status=403)
+        return JsonResponse(
+            {"error": "No tienes permiso para modificar este comentario"}, status=403
+        )
 
     if request.method == "PUT":
         data = json.loads(request.body)
@@ -803,9 +836,7 @@ def friends_posts(request):
 
             comments = []
             comments_col = (
-                db.collection("posts")
-                .document(post_id)
-                .collection("comments")
+                db.collection("posts").document(post_id).collection("comments")
             )
             for c_snap in comments_col.order_by("timestamp").stream():
                 c = c_snap.to_dict()
@@ -848,10 +879,8 @@ def posts_by_user(request, user_uid):
             return JsonResponse({"error": "Perfil no encontrado"}, status=404)
 
     resultados = []
-    col = (
-        doc_ref
-        .collection("posts")
-        .order_by("timestamp", direction=firestore.Query.DESCENDING)
+    col = doc_ref.collection("posts").order_by(
+        "timestamp", direction=firestore.Query.DESCENDING
     )
     for snap in col.stream():
         post = snap.to_dict()
@@ -859,11 +888,7 @@ def posts_by_user(request, user_uid):
         post["id"] = post_id
 
         comments = []
-        comments_col = (
-            db.collection("posts")
-            .document(post_id)
-            .collection("comments")
-        )
+        comments_col = db.collection("posts").document(post_id).collection("comments")
         for c_snap in comments_col.order_by("timestamp").stream():
             c = c_snap.to_dict()
             c["id"] = c_snap.id
@@ -1077,7 +1102,9 @@ def notifications(request):
 
     if request.method == "GET":
         items = []
-        for snap in col.order_by("timestamp", direction=firestore.Query.DESCENDING).stream():
+        for snap in col.order_by(
+            "timestamp", direction=firestore.Query.DESCENDING
+        ).stream():
             d = snap.to_dict()
             d["id"] = snap.id
             ts = d.get("timestamp")
@@ -1094,7 +1121,12 @@ def notifications(request):
 def notification_detail(request, notification_id):
     """Marca una notificación como leída o la elimina."""
     uid = request.user_firebase["uid"]
-    doc = db.collection("profiles").document(uid).collection("notifications").document(notification_id)
+    doc = (
+        db.collection("profiles")
+        .document(uid)
+        .collection("notifications")
+        .document(notification_id)
+    )
 
     if request.method == "PATCH":
         doc.update({"read": True})
@@ -1112,7 +1144,12 @@ def chat_unread_count(request, room_name):
     """Devuelve cantidad de mensajes no leídos en una sala."""
     uid = request.user_firebase["uid"]
     from django.db.models import Q
-    count = ChatMessage.objects.filter(room=room_name).exclude(read_by__contains=[uid]).count()
+
+    count = (
+        ChatMessage.objects.filter(room=room_name)
+        .exclude(read_by__contains=[uid])
+        .count()
+    )
     return JsonResponse({"unread": count})
 
 
@@ -1148,7 +1185,9 @@ def create_service_profile(request):
         return JsonResponse({"error": "Faltan datos requeridos"}, status=400)
 
     try:
-        user_record = create_user(email=email, password=password, display_name=business_name)
+        user_record = create_user(
+            email=email, password=password, display_name=business_name
+        )
 
         timestamp = int(datetime.utcnow().timestamp())
         code = int(f"{timestamp}{random.randint(0,9)}")
@@ -1166,7 +1205,10 @@ def create_service_profile(request):
         }
 
         db.collection("services").document(user_record.uid).set(profile_data)
-        return JsonResponse({"mensaje": "Servicio creado", "uid": user_record.uid, "code": code}, status=201)
+        return JsonResponse(
+            {"mensaje": "Servicio creado", "uid": user_record.uid, "code": code},
+            status=201,
+        )
     except Exception as e:
         return JsonResponse({"error": str(e)}, status=400)
 
@@ -1185,7 +1227,13 @@ def services_list(request):
             tipos = " ".join(d.get("services", [])).lower()
             if q not in tipos:
                 continue
-        servicios.append({"uid": snap.id, "businessName": d.get("businessName"), "services": d.get("services", [])})
+        servicios.append(
+            {
+                "uid": snap.id,
+                "businessName": d.get("businessName"),
+                "services": d.get("services", []),
+            }
+        )
     return JsonResponse(servicios, safe=False)
 
 
