@@ -707,6 +707,18 @@ def comment_detail(request, post_id, comment_id):
         .document(comment_id)
     )
 
+    # Traer el comentario actual
+    snapshot = ref.get()
+    if not snapshot.exists:
+        return JsonResponse({"error": "Comentario no encontrado"}, status=404)
+
+    comment_data = snapshot.to_dict()
+    user_uid = request.user_firebase["uid"]
+
+    # Verifica si el comentario le pertenece al usuario actual
+    if comment_data.get("userId") != user_uid:
+        return JsonResponse({"error": "No tienes permiso para modificar este comentario"}, status=403)
+
     if request.method == "PUT":
         data = json.loads(request.body)
         ref.update(
