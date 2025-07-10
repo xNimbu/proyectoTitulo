@@ -8,6 +8,9 @@ urlpatterns = [
     path("protegido/", views.vista_protegida, name="vista_protegida"),
     path("crear_usuario/", views.crear_usuario, name="crear_usuario"),
     path("login_google/", views.login_google, name="login_google"),
+    path("admin/create_service_profile/", views.create_service_profile, name="create_service_profile"),
+    path("services_list/", views.services_list, name="services_list"),
+    path("contact_service/", views.contact_service, name="contact_service"),
 
     # ------------------------------
     # User’s own profile, pets, posts, friends, relations

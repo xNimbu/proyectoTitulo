@@ -74,9 +74,18 @@ def login_google(request):
     except json.JSONDecodeError:
         data = {}
 
-    # 3) Referencia al documento de perfil
+    # 3) Referencia al documento de perfil o servicio
     prof_ref = db.collection("profiles").document(uid)
     prof_snap = prof_ref.get()
+    service_ref = db.collection("services").document(uid)
+    service_snap = service_ref.get()
+    is_service = False
+
+    if not prof_snap.exists and service_snap.exists:
+        # El usuario es un servicio registrado por un admin
+        prof_ref = service_ref
+        prof_snap = service_snap
+        is_service = True
 
     # 4) Si no existe perfil, lo creamos
     if not prof_snap.exists:
@@ -104,8 +113,12 @@ def login_google(request):
         return [doc.to_dict() for doc in col]
 
     posts = fetch_collection("posts")
-    friends = fetch_collection("friends")
-    pets = fetch_collection("pets")
+    if is_service:
+        friends = []
+        pets = []
+    else:
+        friends = fetch_collection("friends")
+        pets = fetch_collection("pets")
 
     # 6) Respuesta final
     return JsonResponse(
@@ -198,6 +211,10 @@ def profile(request):
     uid = request.user_firebase["uid"]
     email = request.user_firebase["email"]
     doc_ref = db.collection("profiles").document(uid)
+    service_ref = db.collection("services").document(uid)
+    service_snap = service_ref.get()
+    if not doc_ref.get().exists and service_snap.exists:
+        doc_ref = service_ref
 
     if request.method == "GET":
         snap = doc_ref.get()
@@ -205,22 +222,24 @@ def profile(request):
             return JsonResponse({"error": "Perfil no encontrado"}, status=404)
         data = snap.to_dict()
 
+        role = data.get("role", "user")
         profile_data = {
             "fullName": data.get("fullName"),
             "username": data.get("username"),
             "email": data.get("email", email),
             "phone": data.get("phone"),
             "photoURL": data.get("photoURL"),
-            "role": data.get("role", "user"),
+            "role": role,
             "code": data.get("code"),
         }
 
-        # Mascotas
+        # Mascotas solo para usuarios normales
         pets = []
-        for pet_snap in doc_ref.collection("pets").stream():
-            pet = pet_snap.to_dict()
-            pet["id"] = pet_snap.id
-            pets.append(pet)
+        if role != "service":
+            for pet_snap in doc_ref.collection("pets").stream():
+                pet = pet_snap.to_dict()
+                pet["id"] = pet_snap.id
+                pets.append(pet)
         profile_data["pets"] = pets
 
         # Publicaciones
@@ -249,20 +268,21 @@ def profile(request):
             posts.append(p)
         profile_data["posts"] = posts
 
-        # Amigos
+        # Amigos solo para usuarios normales
         friends = []
-        for friend_snap in doc_ref.collection("friends").stream():
-            f = friend_snap.to_dict()
-            friends.append(
-                {
-                    "uid": friend_snap.id,
-                    "username": f.get("username", ""),
-                    "avatar": f.get("avatar", ""),
-                    "addedAt": (
-                        f.get("addedAt").isoformat() if f.get("addedAt") else None
-                    ),
-                }
-            )
+        if role != "service":
+            for friend_snap in doc_ref.collection("friends").stream():
+                f = friend_snap.to_dict()
+                friends.append(
+                    {
+                        "uid": friend_snap.id,
+                        "username": f.get("username", ""),
+                        "avatar": f.get("avatar", ""),
+                        "addedAt": (
+                            f.get("addedAt").isoformat() if f.get("addedAt") else None
+                        ),
+                    }
+                )
         profile_data["friends"] = friends
 
         return JsonResponse(profile_data)
@@ -320,24 +340,32 @@ def profile_detail(request, uid):
     doc_ref = db.collection("profiles").document(uid)
     snap = doc_ref.get()
     if not snap.exists:
-        return JsonResponse({"error": "Perfil no encontrado"}, status=404)
+        service_ref = db.collection("services").document(uid)
+        snap = service_ref.get()
+        if not snap.exists:
+            return JsonResponse({"error": "Perfil no encontrado"}, status=404)
+        doc_ref = service_ref
     data = snap.to_dict()
 
+    role = data.get("role", "user")
     profile_data = {
         "fullName": data.get("fullName"),
         "username": data.get("username"),
         "email": data.get("email"),
         "phone": data.get("phone"),
         "photoURL": data.get("photoURL"),
-        "role": data.get("role", "user"),
+        "role": role,
         "code": data.get("code"),
     }
 
     # Mascotas
-    profile_data["pets"] = [
-        dict(**pet_snap.to_dict(), id=pet_snap.id)
-        for pet_snap in doc_ref.collection("pets").stream()
-    ]
+    if role != "service":
+        profile_data["pets"] = [
+            dict(**pet_snap.to_dict(), id=pet_snap.id)
+            for pet_snap in doc_ref.collection("pets").stream()
+        ]
+    else:
+        profile_data["pets"] = []
 
     # Publicaciones
     posts = []
@@ -356,16 +384,19 @@ def profile_detail(request, uid):
     profile_data["posts"] = posts
 
     # Amigos
-    profile_data["friends"] = [
-        {
-            "uid": f_snap.id,
-            "username": f.get("username", ""),
-            "avatar": f.get("avatar", ""),
-            "addedAt": f.get("addedAt").isoformat() if f.get("addedAt") else None,
-        }
-        for f_snap in doc_ref.collection("friends").stream()
-        for f in [f_snap.to_dict()]
-    ]
+    if role != "service":
+        profile_data["friends"] = [
+            {
+                "uid": f_snap.id,
+                "username": f.get("username", ""),
+                "avatar": f.get("avatar", ""),
+                "addedAt": f.get("addedAt").isoformat() if f.get("addedAt") else None,
+            }
+            for f_snap in doc_ref.collection("friends").stream()
+            for f in [f_snap.to_dict()]
+        ]
+    else:
+        profile_data["friends"] = []
 
     return JsonResponse(profile_data)
 
@@ -390,7 +421,18 @@ def profile_by_username(request, username):
         break
 
     if not uid:
-        return JsonResponse({"error": "Perfil no encontrado"}, status=404)
+        # Buscar en servicios
+        query = (
+            db.collection("services")
+            .where("username", "==", username)
+            .limit(1)
+            .stream()
+        )
+        for snap in query:
+            uid = snap.id
+            break
+        if not uid:
+            return JsonResponse({"error": "Perfil no encontrado"}, status=404)
 
     # Reutilizar la lógica de `profile_detail`
     return profile_detail(request, uid)
@@ -787,8 +829,12 @@ def posts_by_user(request, user_uid):
     """Lista los posts públicos de un usuario específico."""
 
     doc_ref = db.collection("profiles").document(user_uid)
-    if not doc_ref.get().exists:
-        return JsonResponse({"error": "Perfil no encontrado"}, status=404)
+    snap = doc_ref.get()
+    if not snap.exists:
+        doc_ref = db.collection("services").document(user_uid)
+        snap = doc_ref.get()
+        if not snap.exists:
+            return JsonResponse({"error": "Perfil no encontrado"}, status=404)
 
     resultados = []
     col = (
@@ -1057,3 +1103,109 @@ def chat_unread_count(request, room_name):
     from django.db.models import Q
     count = ChatMessage.objects.filter(room=room_name).exclude(read_by__contains=[uid]).count()
     return JsonResponse({"unread": count})
+
+
+# ------------------------------------------------------------------------------
+# Service Profiles
+# ------------------------------------------------------------------------------
+
+
+@csrf_exempt
+@firebase_login_required
+def create_service_profile(request):
+    """Crea un perfil de empresa o servicio (solo admins)."""
+    if request.method != "POST":
+        return JsonResponse({"error": "Método no permitido"}, status=405)
+
+    admin_uid = request.user_firebase["uid"]
+    admin_ref = db.collection("profiles").document(admin_uid).get()
+    if not admin_ref.exists or admin_ref.to_dict().get("role") != "admin":
+        return JsonResponse({"error": "Forbidden"}, status=403)
+
+    try:
+        data = json.loads(request.body)
+    except json.JSONDecodeError:
+        return JsonResponse({"error": "JSON inválido"}, status=400)
+
+    email = data.get("email")
+    password = data.get("password")
+    business_name = data.get("businessName") or data.get("razonSocial")
+    services_offered = data.get("services", [])
+    contact = data.get("contact", {})
+
+    if not email or not password or not business_name:
+        return JsonResponse({"error": "Faltan datos requeridos"}, status=400)
+
+    try:
+        user_record = create_user(email=email, password=password, display_name=business_name)
+
+        timestamp = int(datetime.utcnow().timestamp())
+        code = int(f"{timestamp}{random.randint(0,9)}")
+
+        profile_data = {
+            "businessEmail": email,
+            "businessName": business_name,
+            "services": services_offered,
+            "contact": contact,
+            "tempPassword": password,
+            "role": "service",
+            "code": code,
+            "createdAt": datetime.utcnow(),
+            "username": data.get("username", ""),
+        }
+
+        db.collection("services").document(user_record.uid).set(profile_data)
+        return JsonResponse({"mensaje": "Servicio creado", "uid": user_record.uid, "code": code}, status=201)
+    except Exception as e:
+        return JsonResponse({"error": str(e)}, status=400)
+
+
+@csrf_exempt
+def services_list(request):
+    """Lista todos los perfiles de servicio."""
+    if request.method != "GET":
+        return JsonResponse({"error": "Método no permitido"}, status=405)
+
+    q = request.GET.get("q", "").lower()
+    servicios = []
+    for snap in db.collection("services").stream():
+        d = snap.to_dict()
+        if q:
+            tipos = " ".join(d.get("services", [])).lower()
+            if q not in tipos:
+                continue
+        servicios.append({"uid": snap.id, "businessName": d.get("businessName"), "services": d.get("services", [])})
+    return JsonResponse(servicios, safe=False)
+
+
+@csrf_exempt
+@firebase_login_required
+def contact_service(request):
+    """Permite a un usuario enviar un mensaje a un servicio."""
+    if request.method != "POST":
+        return JsonResponse({"error": "Método no permitido"}, status=405)
+
+    from_uid = request.user_firebase["uid"]
+
+    try:
+        data = json.loads(request.body)
+    except json.JSONDecodeError:
+        return JsonResponse({"error": "JSON inválido"}, status=400)
+
+    service_uid = data.get("serviceUid")
+    message = data.get("message")
+    if not service_uid or not message:
+        return JsonResponse({"error": "Faltan datos"}, status=400)
+
+    service_ref = db.collection("services").document(service_uid)
+    if not service_ref.get().exists:
+        return JsonResponse({"error": "Servicio no encontrado"}, status=404)
+
+    msg = {
+        "fromUser": from_uid,
+        "serviceUid": service_uid,
+        "message": message,
+        "timestamp": datetime.utcnow(),
+    }
+    service_ref.collection("messages").add(msg)
+    return JsonResponse({"mensaje": "Mensaje enviado"}, status=201)
