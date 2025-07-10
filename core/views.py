@@ -666,7 +666,7 @@ def comments(request, post_id):
         data = json.loads(request.body)
         new_comment = {
             "userId": user["uid"],
-            "username": user["username"],
+            "username": user["email"],
             "message": data.get("message"),
             "timestamp": datetime.utcnow(),
         }
@@ -676,7 +676,7 @@ def comments(request, post_id):
         if owner and owner != user["uid"]:
             add_notification(
                 owner,
-                f"{user['username']} coment\u00f3 tu publicaci\u00f3n",
+                f"{user['email']} coment\u00f3 tu publicaci\u00f3n",
                 "comment",
                 {"postId": post_id},
             )
